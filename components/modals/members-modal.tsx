@@ -24,7 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useModal } from "@/hooks/use-modal-store";
-import { ServerWithMemberWithProfiles } from "@/types";
+import { ServerWithMembersWithProfiles } from "@/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UserAvatar } from "@/components/user-avatar";
 import {
@@ -51,7 +51,7 @@ export const MembersModal = () => {
   const [loadingId, setLoadingId] = useState("");
 
   const isModalOpen = isOpen && type === "members";
-  const { server } = data as { server: ServerWithMemberWithProfiles };
+  const { server } = data as { server: ServerWithMembersWithProfiles };
 
   const onKick = async (memberId: string) => {
     try {
