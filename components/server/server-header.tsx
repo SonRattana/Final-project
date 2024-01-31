@@ -1,6 +1,6 @@
 "use client";
 
-import { ServerWithMemberWithProfiles } from "@/types";
+import { ServerWithMembersWithProfiles } from "@/types";
 import { MemberRole, Server } from "@prisma/client";
 import { 
     DropdownMenu, 
@@ -14,7 +14,7 @@ import { useModal } from "@/hooks/use-modal-store";
 
 
 interface ServerHeaderProps {
-    server: ServerWithMemberWithProfiles
+    server: ServerWithMembersWithProfiles
     role?: MemberRole;
 };
 
