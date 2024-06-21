@@ -14,6 +14,7 @@ import { useRouter, useParams } from "next/navigation";
 import { UserAvatar } from "@/components/user-avatar";
 import { ActionTooltip } from "@/components/action-tooltip";
 import { cn } from "@/lib/utils";
+import React, { MouseEventHandler } from 'react';
 import {
   Form,
   FormControl,
@@ -23,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useModal } from "@/hooks/use-modal-store";
+import { EmojiPicker } from "@/components/emoji-picker"; // Import EmojiPicker
 
 interface ChatItemProps {
   id: string;
@@ -37,7 +39,13 @@ interface ChatItemProps {
   isUpdated: boolean;
   socketUrl: string;
   socketQuery: Record<string, string>;
+  onClick?: MouseEventHandler<HTMLDivElement>;
 };
+
+interface Reaction {
+  emoji: string;
+  count: number;
+}
 
 const roleIconMap = {
   "GUEST": null,
@@ -62,6 +70,7 @@ export const ChatItem = ({
   socketQuery
 }: ChatItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [reactions, setReactions] = useState<Reaction[]>([]);
   const { onOpen } = useModal();
   const params = useParams();
   const router = useRouter();
@@ -127,6 +136,18 @@ export const ChatItem = ({
   const isPDF = fileType === "pdf" && fileUrl;
   const isImage = !isPDF && fileUrl;
 
+  const handleAddReaction = async (emoji: string) => {
+    try {
+      const url = `/api/socket/messages/reactions/${id}`;
+
+      const response = await axios.post(url, { emoji });
+
+      setReactions(response.data.reactions);
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
   return (
     <div className="relative group flex items-center hover:bg-black/5 p-4 transition w-full">
       <div className="group flex gap-x-2 items-start w-full">
@@ -176,17 +197,27 @@ export const ChatItem = ({
             </div>
           )}
           {!fileUrl && !isEditing && (
-            <p className={cn(
-              "text-sm text-zinc-600 dark:text-zinc-300",
-              deleted && "italic text-zinc-500 dark:text-zinc-400 text-xs mt-1"
-            )}>
-              {content}
-              {isUpdated && !deleted && (
-                <span className="text-[10px] mx-2 text-zinc-500 dark:text-zinc-400">
-                  (edited)
-                </span>
-              )}
-            </p>
+            <div>
+              <p className={cn(
+                "text-sm text-zinc-600 dark:text-zinc-300",
+                deleted && "italic text-zinc-500 dark:text-zinc-400 text-xs mt-1"
+              )}>
+                {content}
+                {isUpdated && !deleted && (
+                  <span className="text-[10px] mx-2 text-zinc-500 dark:text-zinc-400">
+                    (edited)
+                  </span>
+                )}
+              </p>
+              <div className="flex flex-wrap mt-1">
+                {reactions.map(({ emoji, count }) => (
+                  <div key={emoji} className="emoji-container">
+                    <span>{emoji}</span>
+                    <span className="ml-1">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
           {!fileUrl && isEditing && (
             <Form {...form}>
@@ -220,6 +251,8 @@ export const ChatItem = ({
               </span>
             </Form>
           )}
+          <EmojiPicker onChange={handleAddReaction} />
+          
         </div>
       </div>
       {canDeleteMessage && (
@@ -241,6 +274,7 @@ export const ChatItem = ({
               className="cursor-pointer ml-auto w-4 h-4 text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
             />
           </ActionTooltip>
+          
         </div>
       )}
     </div>
