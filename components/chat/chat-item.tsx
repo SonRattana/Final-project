@@ -251,7 +251,7 @@ export const ChatItem = ({
               </span>
             </Form>
           )}
-          <EmojiPicker onChange={handleAddReaction} />
+          {/* <EmojiPicker onChange={handleAddReaction} /> */}
           
         </div>
       </div>
