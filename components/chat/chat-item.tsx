@@ -1,3 +1,5 @@
+// components/chat/chat-item.tsx
+
 "use client";
 
 import * as z from "zod";
@@ -6,11 +8,10 @@ import qs from "query-string";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Member, MemberRole, Profile } from "@prisma/client";
-import { Edit, FileIcon, ShieldAlert, ShieldCheck, Trash } from "lucide-react";
+import { Edit, FileIcon, ShieldAlert, ShieldCheck, Trash, Reply } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-
 import { UserAvatar } from "@/components/user-avatar";
 import { ActionTooltip } from "@/components/action-tooltip";
 import { cn } from "@/lib/utils";
@@ -24,7 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useModal } from "@/hooks/use-modal-store";
-import { EmojiPicker } from "@/components/emoji-picker"; // Import EmojiPicker
+import { EmojiPicker } from "@/components/emoji-picker";
 
 interface ChatItemProps {
   id: string;
@@ -40,7 +41,9 @@ interface ChatItemProps {
   socketUrl: string;
   socketQuery: Record<string, string>;
   onClick?: MouseEventHandler<HTMLDivElement>;
-};
+  onReply?: (messageId: string, content: string) => void; // Add this prop for handling replies
+  replyTo?: ChatItemProps | null; // Add this prop for reply reference
+}
 
 interface Reaction {
   emoji: string;
@@ -67,9 +70,13 @@ export const ChatItem = ({
   currentMember,
   isUpdated,
   socketUrl,
-  socketQuery
+  socketQuery,
+  onClick,
+  onReply, // Add this prop for handling replies
+  replyTo = null, // Add this prop for reply reference
 }: ChatItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [isReplying, setIsReplying] = useState(false);
   const [reactions, setReactions] = useState<Reaction[]>([]);
   const { onOpen } = useModal();
   const params = useParams();
@@ -79,7 +86,7 @@ export const ChatItem = ({
     if (member.id === currentMember.id) {
       return;
     }
-  
+
     router.push(`/servers/${params?.serverId}/conversations/${member.id}`);
   }
 
@@ -87,12 +94,13 @@ export const ChatItem = ({
     const handleKeyDown = (event: any) => {
       if (event.key === "Escape" || event.keyCode === 27) {
         setIsEditing(false);
+        setIsReplying(false);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
 
-    return () => window.removeEventListener("keyDown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -102,7 +110,15 @@ export const ChatItem = ({
     }
   });
 
+  const replyForm = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      content: ""
+    }
+  });
+
   const isLoading = form.formState.isSubmitting;
+  const isReplyLoading = replyForm.formState.isSubmitting;
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
@@ -120,6 +136,22 @@ export const ChatItem = ({
     }
   }
 
+  // const onReplySubmit = async (values: z.infer<typeof formSchema>) => {
+  //   try {
+  //     const url = qs.stringifyUrl({
+  //       url: `${socketUrl}/reply`,
+  //       query: socketQuery,
+  //     });
+
+  //     await axios.post(url, { ...values, replyTo: id });
+
+  //     replyForm.reset();
+  //     setIsReplying(false);
+  //   } catch (error) {
+  //     console.log(error);
+  //   }
+  // }
+
   useEffect(() => {
     form.reset({
       content: content,
@@ -133,6 +165,7 @@ export const ChatItem = ({
   const isOwner = currentMember.id === member.id;
   const canDeleteMessage = !deleted && (isAdmin || isModerator || isOwner);
   const canEditMessage = !deleted && isOwner && !fileUrl;
+  const canReplyMessage = !deleted && currentMember.id !== member.id; // Ensure the current member is not the owner of the message
   const isPDF = fileType === "pdf" && fileUrl;
   const isImage = !isPDF && fileUrl;
 
@@ -149,7 +182,7 @@ export const ChatItem = ({
   }
 
   return (
-    <div className="relative group flex items-center hover:bg-black/5 p-4 transition w-full">
+    <div id={id} className="chat-item relative group flex items-center hover:bg-black/5 p-4 transition w-full" onClick={onClick}>
       <div className="group flex gap-x-2 items-start w-full">
         <div onClick={onMemberClick} className="cursor-pointer hover:drop-shadow-md transition">
           <UserAvatar src={member.profile.imageUrl} />
@@ -168,8 +201,14 @@ export const ChatItem = ({
               {timestamp}
             </span>
           </div>
+          {/* {replyTo && (
+            <div className="flex items-center text-xs text-gray-500 mb-2">
+              <span className="mr-1">@{replyTo.member.profile.name}</span>
+              <span>{replyTo.content}</span>
+            </div>
+          )} */}
           {isImage && (
-            <a 
+            <a
               href={fileUrl}
               target="_blank"
               rel="noopener noreferrer"
@@ -186,7 +225,7 @@ export const ChatItem = ({
           {isPDF && (
             <div className="relative flex items-center p-2 mt-2 rounded-md bg-background/10">
               <FileIcon className="h-10 w-10 fill-indigo-200 stroke-indigo-400" />
-              <a 
+              <a
                 href={fileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -221,62 +260,99 @@ export const ChatItem = ({
           )}
           {!fileUrl && isEditing && (
             <Form {...form}>
-              <form 
+              <form
                 className="flex items-center w-full gap-x-2 pt-2"
                 onSubmit={form.handleSubmit(onSubmit)}>
-                  <FormField
-                    control={form.control}
-                    name="content"
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormControl>
-                          <div className="relative w-full">
-                            <Input
-                              disabled={isLoading}
-                              className="p-2 bg-zinc-200/90 dark:bg-zinc-700/75 border-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-zinc-600 dark:text-zinc-200"
-                              placeholder="Edited message"
-                              {...field}
-                            />
-                          </div>
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <Button disabled={isLoading} size="sm" variant="primary">
-                    Save
-                  </Button>
+                <FormField
+                  control={form.control}
+                  name="content"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormControl>
+                        <div className="relative w-full">
+                          <Input
+                            disabled={isLoading}
+                            className="p-2 bg-zinc-200/90 dark:bg-zinc-700/75 border-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-zinc-600 dark:text-zinc-200"
+                            placeholder="Edited message"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <Button disabled={isLoading} size="sm" variant="primary">
+                  Save
+                </Button>
               </form>
               <span className="text-[10px] mt-1 text-zinc-400">
                 Press escape to cancel, enter to save
               </span>
             </Form>
           )}
-          {/* <EmojiPicker onChange={handleAddReaction} /> */}
-          
+          {/* {isReplying && (
+            <Form {...replyForm}>
+              <form
+                className="flex items-center w-full gap-x-2 pt-2"
+                onSubmit={replyForm.handleSubmit(onReplySubmit)}>
+                <FormField
+                  control={replyForm.control}
+                  name="content"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormControl>
+                        <div className="relative w-full">
+                          <Input
+                            disabled={isReplyLoading}
+                            className="p-2 bg-zinc-200/90 dark:bg-zinc-700/75 border-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-zinc-600 dark:text-zinc-200"
+                            placeholder="Type your reply"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <Button disabled={isReplyLoading} size="sm" variant="primary">
+                  Reply
+                </Button>
+              </form>
+              <span className="text-[10px] mt-1 text-zinc-400">
+                Press escape to cancel, enter to send
+              </span>
+            </Form>
+          )} */}
         </div>
       </div>
-      {canDeleteMessage && (
-        <div className="hidden group-hover:flex items-center gap-x-2 absolute p-1 -top-2 right-5 bg-white dark:bg-zinc-800 border rounded-sm">
-          {canEditMessage && (
-            <ActionTooltip label="Edit">
-              <Edit
-                onClick={() => setIsEditing(true)}
-                className="cursor-pointer ml-auto w-4 h-4 text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
-              />
-            </ActionTooltip>
-          )}
-          <ActionTooltip label="Delete">
-            <Trash
-              onClick={() => onOpen("deleteMessage", { 
-                apiUrl: `${socketUrl}/${id}`,
-                query: socketQuery,
-               })}
+      <div className="hidden group-hover:flex items-center gap-x-2 absolute p-1 -top-2 right-5 bg-white dark:bg-zinc-800 border rounded-sm">
+        {/* {canReplyMessage && (
+          <ActionTooltip label="Reply">
+            <Reply
+              onClick={() => setIsReplying(true)} // Set reply mode
               className="cursor-pointer ml-auto w-4 h-4 text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
             />
           </ActionTooltip>
-          
-        </div>
-      )}
+        )} */}
+        {canEditMessage && (
+          <ActionTooltip label="Edit">
+            <Edit
+              onClick={() => setIsEditing(true)}
+              className="cursor-pointer ml-auto w-4 h-4 text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
+            />
+          </ActionTooltip>
+        )}
+        {canDeleteMessage && (
+          <ActionTooltip label="Delete">
+            <Trash
+              onClick={() => onOpen("deleteMessage", {
+                apiUrl: `${socketUrl}/${id}`,
+                query: socketQuery,
+              })}
+              className="cursor-pointer ml-auto w-4 h-4 text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
+            />
+          </ActionTooltip>
+        )}
+      </div>
     </div>
-  )
-}
+  );
+};
