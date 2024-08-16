@@ -39,7 +39,7 @@
     "dotenv": "^16.4.5",
     "emoji-mart": "^5.5.2",
     "eslint-plugin-react-hooks": "^5.0.0-canary-763612647-20240126",
-    "livekit-client": "^1.15.10",
+    "livekit-client": "^1.15.13",
     "livekit-server-sdk": "^1.2.7",
     "lucide-react": "^0.304.0",
     "next": "^14.2.5",

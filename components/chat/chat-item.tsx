@@ -1,5 +1,3 @@
-// components/chat/chat-item.tsx
-
 "use client";
 
 import * as z from "zod";
@@ -8,7 +6,7 @@ import qs from "query-string";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Member, MemberRole, Profile } from "@prisma/client";
-import { Edit, FileIcon, ShieldAlert, ShieldCheck, Trash, Reply } from "lucide-react";
+import { Edit, FileIcon, ShieldAlert, ShieldCheck, Trash, Reply, Smile } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
@@ -41,8 +39,10 @@ interface ChatItemProps {
   socketUrl: string;
   socketQuery: Record<string, string>;
   onClick?: MouseEventHandler<HTMLDivElement>;
-  onReply?: (messageId: string, content: string) => void; // Add this prop for handling replies
-  replyTo?: ChatItemProps | null; // Add this prop for reply reference
+  onReply?: (messageId: string, content: string) => void;
+  replyTo?: ChatItemProps | null;
+  onReaction: (messageId: string, emoji: string) => void;
+  reactions?: Reaction[]; // Sử dụng kiểu Reaction[] cho reactions
 }
 
 interface Reaction {
@@ -52,9 +52,9 @@ interface Reaction {
 
 const roleIconMap = {
   "GUEST": null,
-  "MODERATOR": <ShieldCheck className="h-4 w-4 ml-2 text-indigo-500" />,
+  "MODERATOR": <ShieldCheck className="h-4 w-4 ml-2 text-yellow-500" />,
   "ADMIN": <ShieldAlert className="h-4 w-4 ml-2 text-rose-500" />,
-}
+};
 
 const formSchema = z.object({
   content: z.string().min(1),
@@ -72,12 +72,14 @@ export const ChatItem = ({
   socketUrl,
   socketQuery,
   onClick,
-  onReply, // Add this prop for handling replies
-  replyTo = null, // Add this prop for reply reference
+  onReply,
+  replyTo = null,
+  onReaction,
+  reactions = [], // Khởi tạo mặc định cho reactions
 }: ChatItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
-  const [reactions, setReactions] = useState<Reaction[]>([]);
+  const [localReactions, setLocalReactions] = useState<Reaction[]>(reactions); // Sử dụng local state cho reactions
   const { onOpen } = useModal();
   const params = useParams();
   const router = useRouter();
@@ -86,35 +88,32 @@ export const ChatItem = ({
     if (member.id === currentMember.id) {
       return;
     }
-
     router.push(`/servers/${params?.serverId}/conversations/${member.id}`);
-  }
+  };
 
   useEffect(() => {
-    const handleKeyDown = (event: any) => {
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" || event.keyCode === 27) {
         setIsEditing(false);
         setIsReplying(false);
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
-
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      content: content
-    }
+      content: content,
+    },
   });
 
   const replyForm = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      content: ""
-    }
+      content: "",
+    },
   });
 
   const isLoading = form.formState.isSubmitting;
@@ -126,36 +125,16 @@ export const ChatItem = ({
         url: `${socketUrl}/${id}`,
         query: socketQuery,
       });
-
       await axios.patch(url, values);
-
       form.reset();
       setIsEditing(false);
     } catch (error) {
       console.log(error);
     }
-  }
-
-  // const onReplySubmit = async (values: z.infer<typeof formSchema>) => {
-  //   try {
-  //     const url = qs.stringifyUrl({
-  //       url: `${socketUrl}/reply`,
-  //       query: socketQuery,
-  //     });
-
-  //     await axios.post(url, { ...values, replyTo: id });
-
-  //     replyForm.reset();
-  //     setIsReplying(false);
-  //   } catch (error) {
-  //     console.log(error);
-  //   }
-  // }
+  };
 
   useEffect(() => {
-    form.reset({
-      content: content,
-    })
+    form.reset({ content });
   }, [content]);
 
   const fileType = fileUrl?.split(".").pop();
@@ -165,21 +144,27 @@ export const ChatItem = ({
   const isOwner = currentMember.id === member.id;
   const canDeleteMessage = !deleted && (isAdmin || isModerator || isOwner);
   const canEditMessage = !deleted && isOwner && !fileUrl;
-  const canReplyMessage = !deleted && currentMember.id !== member.id; // Ensure the current member is not the owner of the message
+  const canReplyMessage = !deleted && currentMember.id !== member.id;
   const isPDF = fileType === "pdf" && fileUrl;
   const isImage = !isPDF && fileUrl;
 
   const handleAddReaction = async (emoji: string) => {
     try {
-      const url = `/api/socket/messages/reactions/${id}`;
-
-      const response = await axios.post(url, { emoji });
-
-      setReactions(response.data.reactions);
+      await onReaction(id, emoji);
+      setLocalReactions((prevReactions) => {
+        const existingReaction = prevReactions.find((reaction) => reaction.emoji === emoji);
+        if (existingReaction) {
+          return prevReactions.map((reaction) =>
+            reaction.emoji === emoji ? { ...reaction, count: reaction.count + 1 } : reaction
+          );
+        } else {
+          return [...prevReactions, { emoji, count: 1 }];
+        }
+      });
     } catch (error) {
       console.log(error);
     }
-  }
+  };
 
   return (
     <div id={id} className="chat-item relative group flex items-center hover:bg-black/5 p-4 transition w-full" onClick={onClick}>
@@ -201,12 +186,6 @@ export const ChatItem = ({
               {timestamp}
             </span>
           </div>
-          {/* {replyTo && (
-            <div className="flex items-center text-xs text-gray-500 mb-2">
-              <span className="mr-1">@{replyTo.member.profile.name}</span>
-              <span>{replyTo.content}</span>
-            </div>
-          )} */}
           {isImage && (
             <a
               href={fileUrl}
@@ -249,7 +228,7 @@ export const ChatItem = ({
                 )}
               </p>
               <div className="flex flex-wrap mt-1">
-                {reactions.map(({ emoji, count }) => (
+                {localReactions.map(({ emoji, count }) => (
                   <div key={emoji} className="emoji-container">
                     <span>{emoji}</span>
                     <span className="ml-1">{count}</span>
@@ -290,49 +269,23 @@ export const ChatItem = ({
               </span>
             </Form>
           )}
-          {/* {isReplying && (
-            <Form {...replyForm}>
-              <form
-                className="flex items-center w-full gap-x-2 pt-2"
-                onSubmit={replyForm.handleSubmit(onReplySubmit)}>
-                <FormField
-                  control={replyForm.control}
-                  name="content"
-                  render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormControl>
-                        <div className="relative w-full">
-                          <Input
-                            disabled={isReplyLoading}
-                            className="p-2 bg-zinc-200/90 dark:bg-zinc-700/75 border-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-zinc-600 dark:text-zinc-200"
-                            placeholder="Type your reply"
-                            {...field}
-                          />
-                        </div>
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <Button disabled={isReplyLoading} size="sm" variant="primary">
-                  Reply
-                </Button>
-              </form>
-              <span className="text-[10px] mt-1 text-zinc-400">
-                Press escape to cancel, enter to send
-              </span>
-            </Form>
-          )} */}
         </div>
       </div>
       <div className="hidden group-hover:flex items-center gap-x-2 absolute p-1 -top-2 right-5 bg-white dark:bg-zinc-800 border rounded-sm">
-        {/* {canReplyMessage && (
+        {canReplyMessage && (
           <ActionTooltip label="Reply">
             <Reply
-              onClick={() => setIsReplying(true)} // Set reply mode
+              onClick={() => setIsReplying(true)}
               className="cursor-pointer ml-auto w-4 h-4 text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
             />
           </ActionTooltip>
-        )} */}
+        )}
+        <ActionTooltip label="React">
+          <Smile
+            onClick={() => handleAddReaction("👍")}
+            className="cursor-pointer ml-auto w-4 h-4 text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
+          />
+        </ActionTooltip>
         {canEditMessage && (
           <ActionTooltip label="Edit">
             <Edit

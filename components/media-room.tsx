@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LiveKitRoom, VideoConference } from "@livekit/components-react";
+import {formatChatMessageLinks, LiveKitRoom, VideoConference } from "@livekit/components-react";
 import "@livekit/components-styles";
 import { Channel } from "@prisma/client";
 import { useUser } from "@clerk/nextjs";
@@ -16,6 +16,7 @@ interface MediaRoomProps {
 export const MediaRoom = ({ chatId, video, audio }: MediaRoomProps) => {
   const { user } = useUser();
   const [token, setToken] = useState();
+  
 
   useEffect(() => {
     if (!user?.firstName || !user?.lastName) return;
@@ -53,7 +54,7 @@ export const MediaRoom = ({ chatId, video, audio }: MediaRoomProps) => {
       video={video}
       audio={audio}
     >
-      <VideoConference />
+      <VideoConference chatMessageFormatter={formatChatMessageLinks}  />
     </LiveKitRoom>
   );
 };

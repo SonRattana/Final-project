@@ -1,7 +1,5 @@
-// components/chat/chat-messages.tsx
-
 "use client";
-import { Fragment, useRef, ElementRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useRef, ElementRef, useEffect, forwardRef, useImperativeHandle, useState } from "react";
 import { format } from "date-fns";
 import { Member, Message, Profile } from "@prisma/client";
 import { Loader2, ServerCrash } from "lucide-react";
@@ -13,14 +11,17 @@ import { useChatSocket } from "@/hooks/use-chat-socket";
 import { ChatWelcome } from "./chat-welcome";
 import { ChatItem } from "./chat-item";
 import { useChatScroll } from "@/hooks/use-chat-scroll";
+import axios from "axios";
 
 const DATE_FORMAT = "d MMM yyyy, HH:mm";
 
 type MessageWithMemberWithProfile = Message & {
   member: Member & {
-    profile: Profile
-  }
-}
+    profile: Profile;
+  };
+  replies?: MessageWithMemberWithProfile[];
+  reactions?: { emoji: string; count: number }[];
+};
 
 interface ChatMessagesProps {
   name: string;
@@ -61,6 +62,8 @@ const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
   const bottomRef = useRef<ElementRef<"div">>(null);
   const params = useParams();
 
+  const [messages, setMessages] = useState<MessageWithMemberWithProfile[]>([]);
+
   const {
     data,
     fetchNextPage,
@@ -73,6 +76,7 @@ const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
     paramKey,
     paramValue,
   });
+
   useChatSocket({ queryKey, addKey, updateKey });
   useChatScroll({
     chatRef,
@@ -110,6 +114,45 @@ const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
     }
   }, [data]);
 
+  const handleReply = async (messageId: string, content: string) => {
+    try {
+      const response = await axios.post(`/api/messages/reply`, { messageId, content });
+      const updatedMessage = response.data;
+
+      setMessages((prevMessages) =>
+        prevMessages.map((message) =>
+          message.id === messageId
+            ? {
+                ...message,
+                replies: message.replies
+                  ? [...message.replies, updatedMessage]
+                  : [updatedMessage],
+              }
+            : message
+        )
+      );
+    } catch (error) {
+      console.error("Failed to send reply:", error);
+    }
+  };
+
+  const handleReaction = async (messageId: string, emoji: string) => {
+    try {
+      const response = await axios.post(`/api/messages/reaction`, { messageId, emoji });
+      const updatedReactions = response.data.reactions;
+
+      setMessages((prevMessages) =>
+        prevMessages.map((message) =>
+          message.id === messageId
+            ? { ...message, reactions: updatedReactions }
+            : message
+        )
+      );
+    } catch (error) {
+      console.error("Failed to add reaction:", error);
+    }
+  };
+
   if (status === "pending") {
     return (
       <div className="flex flex-col flex-1 justify-center items-center">
@@ -118,7 +161,7 @@ const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
           Loading messages...
         </p>
       </div>
-    )
+    );
   }
 
   if (status === "error") {
@@ -129,7 +172,7 @@ const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
           Something went wrong!
         </p>
       </div>
-    )
+    );
   }
 
   const messagesToDisplay = searchQuery && searchResults?.length ? searchResults : data?.pages?.flatMap(page => page.items);
@@ -171,6 +214,9 @@ const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
             isUpdated={message.updatedAt !== message.createdAt}
             socketUrl={socketUrl}
             socketQuery={socketQuery}
+            reactions={message.reactions} // Pass reactions to ChatItem
+            onReply={(msgId, content) => {/* handle reply logic */}}
+            onReaction={(msgId, emoji) => {/* handle reaction logic */}}
           />
         ))}
       </div>
