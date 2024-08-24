@@ -25,8 +25,8 @@ const iconMap = {
 
 const roleIconMap = {
   [MemberRole.GUEST]: null,
-  [MemberRole.MODERATOR]: <ShieldCheck className="h-4 w-4 mr-2 text-indigo-500" />,
-  [MemberRole.ADMIN]: <ShieldAlert className="h-4 w-4 mr-2 text-rose-500" />
+  [MemberRole.MODERATOR]: <ShieldCheck className="h-4 w-4 mr-2 text-yellow-500" />,
+  [MemberRole.ADMIN]: <ShieldAlert className="h-4 w-4 mr-2 text-green-500" />
 }
 
 export const ServerSidebar = async ({
@@ -71,7 +71,7 @@ export const ServerSidebar = async ({
   const role = server.members.find((member) => member.profileId === profile.id)?.role;
 
   return (
-    <div className="flex flex-col h-full text-primary w-full dark:bg-[#2a467f] bg-[#6b9af7]">
+    <div className="flex flex-col h-full text-primary w-full dark:bg-[#1d325d] bg-[#a6c0f5]">
       <ServerHeader
         server={server}
         role={role}
@@ -119,7 +119,7 @@ export const ServerSidebar = async ({
             ]}
           />
         </div>
-        <Separator className="bg-zinc-200 dark:bg-zinc-700 rounded-md my-2" />
+        <Separator className="bg-zinc-200 dark:bg-zinc-900 rounded-md my-2" />
         {!!textChannels?.length && (
           <div className="mb-2">
             <ServerSection

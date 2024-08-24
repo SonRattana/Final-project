@@ -5,7 +5,7 @@ import axios from "axios";
 import qs from "query-string";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Smile } from "lucide-react";
+import { Plus, Smile, Send } from "lucide-react"; // Add Send icon
 import { useRouter } from "next/navigation";
 
 import {
@@ -86,11 +86,18 @@ export const ChatInput = ({
                     placeholder={`Message ${type === "conversation" ? name : "#" + name}`}
                     {...field}
                   />
-                  <div className="absolute top-7 right-8">
+                  <div className="absolute top-7 right-16"> {/* Adjusted right position */}
                     <EmojiPicker
                       onChange={(emoji: string) => field.onChange(`${field.value} ${emoji}`)}
                     />
                   </div>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="absolute top-7 right-8 h-[24px] w-[24px]  bg-zinc-500 dark:bg-zinc-400 hover:bg-zinc-600 dark:hover:bg-zinc-300 transition rounded-full p-1 flex items-center justify-center"
+                  >
+                    <Send className="text-white" />
+                  </button>
                 </div>
               </FormControl>
             </FormItem>

@@ -3,7 +3,7 @@
 
 import { useRef, useCallback } from "react";
 import {ChatHeader} from "./chat-header";
-import ChatMessages, { ChatMessagesRef } from "./chat-messages";
+import { ChatMessages, ChatMessagesRef } from "./chat-messages";
 import ClientChatHeader from "./client-chat-header";
 interface Message {
   id: string;

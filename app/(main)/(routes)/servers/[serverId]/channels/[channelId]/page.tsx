@@ -8,6 +8,7 @@ import ClientChatPage from "@/components/chat/client-chat-page";
 import { ChatInput } from "@/components/chat/chat-input";
 import { MediaRoom } from "@/components/media-room";
 import ChatPage from "@/components/chat/chat-page";
+
 interface ChannelIdPageProps {
   params: {
     serverId: string;
@@ -18,10 +19,12 @@ interface ChannelIdPageProps {
 const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
   const profile = await currentProfile();
 
+  // Redirect to sign-in if no profile
   if (!profile) {
     return redirectToSignIn();
   }
 
+  // Fetch the channel and check if the user is a member
   const channel = await db.channel.findUnique({
     where: {
       id: params.channelId,
@@ -35,10 +38,12 @@ const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
     },
   });
 
+  // If no channel or not a member, redirect to homepage
   if (!channel || !member) {
     return redirect("/");
   }
 
+  // Fetch messages for the channel
   const messages = await db.message.findMany({
     where: {
       channelId: channel.id,
@@ -46,12 +51,23 @@ const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
     select: {
       id: true,
       content: true,
+      member: {
+        select: {
+          profile: {
+            select: {
+              name: true,
+              imageUrl: true,
+            },
+          },
+        },
+      },
     },
   });
 
   return (
     <div className="bg-white dark:bg-[#313338] flex flex-col h-full">
-     <ChatPage
+      {/* Render Chat Page */}
+      <ChatPage
         serverId={channel.serverId}
         name={channel.name}
         type="channel"
@@ -66,7 +82,8 @@ const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
           serverId: channel.serverId,
         }}
       />
-      
+
+      {/* Conditionally render chat input or media room based on channel type */}
       {channel.type === ChannelType.TEXT && (
         <ChatInput
           name={channel.name}
@@ -76,7 +93,6 @@ const ChannelIdPage = async ({ params }: ChannelIdPageProps) => {
             channelId: channel.id,
             serverId: channel.serverId,
           }}
-          
         />
       )}
       {channel.type === ChannelType.AUDIO && (

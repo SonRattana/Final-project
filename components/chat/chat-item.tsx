@@ -53,7 +53,7 @@ interface Reaction {
 const roleIconMap = {
   "GUEST": null,
   "MODERATOR": <ShieldCheck className="h-4 w-4 ml-2 text-yellow-500" />,
-  "ADMIN": <ShieldAlert className="h-4 w-4 ml-2 text-rose-500" />,
+  "ADMIN": <ShieldAlert className="h-4 w-4 ml-2 text-green-500" />,
 };
 
 const formSchema = z.object({
@@ -150,19 +150,28 @@ export const ChatItem = ({
 
   const handleAddReaction = async (emoji: string) => {
     try {
-      await onReaction(id, emoji);
+      // Cập nhật UI ngay lập tức
       setLocalReactions((prevReactions) => {
-        const existingReaction = prevReactions.find((reaction) => reaction.emoji === emoji);
+        const existingReaction = prevReactions.find((r) => r.emoji === emoji);
         if (existingReaction) {
-          return prevReactions.map((reaction) =>
-            reaction.emoji === emoji ? { ...reaction, count: reaction.count + 1 } : reaction
+          return prevReactions.map((r) =>
+            r.emoji === emoji ? { ...r, count: r.count + 1 } : r
           );
         } else {
           return [...prevReactions, { emoji, count: 1 }];
         }
       });
+
+      // Gọi API để cập nhật server
+      await axios.post('/api/socket/reaction', {
+        messageId: id,
+        emoji
+      });
+
+      // Không cần cập nhật localReactions ở đây vì sẽ nhận update qua socket
     } catch (error) {
-      console.log(error);
+      console.error("Lỗi khi thêm reaction:", error);
+      setLocalReactions(reactions); // Revert nếu có lỗi
     }
   };
 
@@ -229,10 +238,14 @@ export const ChatItem = ({
               </p>
               <div className="flex flex-wrap mt-1">
                 {localReactions.map(({ emoji, count }) => (
-                  <div key={emoji} className="emoji-container">
+                  <button
+                    key={emoji}
+                    onClick={() => handleAddReaction(emoji)}
+                    className="flex items-center space-x-1 bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-1 text-sm mr-2 mb-2 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                  >
                     <span>{emoji}</span>
-                    <span className="ml-1">{count}</span>
-                  </div>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{count}</span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -272,14 +285,14 @@ export const ChatItem = ({
         </div>
       </div>
       <div className="hidden group-hover:flex items-center gap-x-2 absolute p-1 -top-2 right-5 bg-white dark:bg-zinc-800 border rounded-sm">
-        {canReplyMessage && (
+        {/* {canReplyMessage && (
           <ActionTooltip label="Reply">
             <Reply
               onClick={() => setIsReplying(true)}
               className="cursor-pointer ml-auto w-4 h-4 text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
             />
           </ActionTooltip>
-        )}
+        )} */}
         <ActionTooltip label="React">
           <Smile
             onClick={() => handleAddReaction("👍")}

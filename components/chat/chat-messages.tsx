@@ -1,26 +1,24 @@
 "use client";
-import { useRef, ElementRef, useEffect, forwardRef, useImperativeHandle, useState } from "react";
+import { Fragment, useRef, ElementRef, forwardRef, useImperativeHandle, useCallback } from "react";
 import { format } from "date-fns";
 import { Member, Message, Profile } from "@prisma/client";
 import { Loader2, ServerCrash } from "lucide-react";
-import { useParams } from "next/navigation";
+import axios from 'axios';
 
 import { useChatQuery } from "@/hooks/use-chat-query";
 import { useChatSocket } from "@/hooks/use-chat-socket";
+import { useChatScroll } from "@/hooks/use-chat-scroll";
 
 import { ChatWelcome } from "./chat-welcome";
 import { ChatItem } from "./chat-item";
-import { useChatScroll } from "@/hooks/use-chat-scroll";
-import axios from "axios";
 
 const DATE_FORMAT = "d MMM yyyy, HH:mm";
 
 type MessageWithMemberWithProfile = Message & {
   member: Member & {
-    profile: Profile;
-  };
-  replies?: MessageWithMemberWithProfile[];
-  reactions?: { emoji: string; count: number }[];
+    profile: Profile
+  },
+  reactions?: { emoji: string; count: number }[]
 };
 
 interface ChatMessagesProps {
@@ -33,15 +31,14 @@ interface ChatMessagesProps {
   paramKey: "channelId" | "conversationId";
   paramValue: string;
   type: "channel" | "conversation";
-  searchQuery?: string;
-  searchResults?: Array<{ id: string; content: string }>;
 }
 
 export interface ChatMessagesRef {
-  scrollToMessage: (messageId: string) => void;
+  scrollToBottom: () => void;
+  scrollToMessage: (id: string) => void;
 }
 
-const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
+export const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
   name,
   member,
   chatId,
@@ -51,8 +48,6 @@ const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
   paramKey,
   paramValue,
   type,
-  searchQuery,
-  searchResults,
 }, ref) => {
   const queryKey = `chat:${chatId}`;
   const addKey = `chat:${chatId}:messages`;
@@ -60,9 +55,6 @@ const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
 
   const chatRef = useRef<ElementRef<"div">>(null);
   const bottomRef = useRef<ElementRef<"div">>(null);
-  const params = useParams();
-
-  const [messages, setMessages] = useState<MessageWithMemberWithProfile[]>([]);
 
   const {
     data,
@@ -77,81 +69,39 @@ const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
     paramValue,
   });
 
+  const handleReaction = useCallback(async (messageId: string, emoji: string) => {
+    try {
+      await axios.post('/api/socket/reaction', {
+        messageId,
+        emoji,
+        serverId: socketQuery.serverId,
+        channelId: socketQuery.channelId
+      });
+    } catch (error) {
+      console.error("Lỗi khi thêm reaction:", error);
+    }
+  }, [socketQuery.serverId, socketQuery.channelId]);
+
   useChatSocket({ queryKey, addKey, updateKey });
   useChatScroll({
     chatRef,
     bottomRef,
     loadMore: fetchNextPage,
     shouldLoadMore: !isFetchingNextPage && !!hasNextPage,
-    count: data?.pages?.[0]?.items?.length ?? 0,
+    count: data?.pages?.length ?? 0,
   });
 
   useImperativeHandle(ref, () => ({
-    scrollToMessage: (messageId: string) => {
-      const element = document.getElementById(messageId);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-        element.classList.add("highlight");
-        setTimeout(() => {
-          element.classList.remove("highlight");
-        }, 2000);
+    scrollToBottom: () => {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    },
+    scrollToMessage: (id: string) => {
+      const messageElement = document.getElementById(id);
+      if (messageElement) {
+        messageElement.scrollIntoView({ behavior: 'smooth' });
       }
     }
   }));
-
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const messageId = urlParams.get("messageId");
-    if (messageId) {
-      const element = document.getElementById(messageId);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-        element.classList.add("highlight");
-        setTimeout(() => {
-          element.classList.remove("highlight");
-        }, 2000);
-      }
-    }
-  }, [data]);
-
-  const handleReply = async (messageId: string, content: string) => {
-    try {
-      const response = await axios.post(`/api/messages/reply`, { messageId, content });
-      const updatedMessage = response.data;
-
-      setMessages((prevMessages) =>
-        prevMessages.map((message) =>
-          message.id === messageId
-            ? {
-                ...message,
-                replies: message.replies
-                  ? [...message.replies, updatedMessage]
-                  : [updatedMessage],
-              }
-            : message
-        )
-      );
-    } catch (error) {
-      console.error("Failed to send reply:", error);
-    }
-  };
-
-  const handleReaction = async (messageId: string, emoji: string) => {
-    try {
-      const response = await axios.post(`/api/messages/reaction`, { messageId, emoji });
-      const updatedReactions = response.data.reactions;
-
-      setMessages((prevMessages) =>
-        prevMessages.map((message) =>
-          message.id === messageId
-            ? { ...message, reactions: updatedReactions }
-            : message
-        )
-      );
-    } catch (error) {
-      console.error("Failed to add reaction:", error);
-    }
-  };
 
   if (status === "pending") {
     return (
@@ -175,18 +125,16 @@ const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
     );
   }
 
-  const messagesToDisplay = searchQuery && searchResults?.length ? searchResults : data?.pages?.flatMap(page => page.items);
-
   return (
     <div ref={chatRef} className="flex-1 flex flex-col py-4 overflow-y-auto relative">
-      {!hasNextPage && !searchQuery && <div className="flex-1" />}
-      {!hasNextPage && !searchQuery && (
+      {!hasNextPage && <div className="flex-1" />}
+      {!hasNextPage && (
         <ChatWelcome
           type={type}
           name={name}
         />
       )}
-      {hasNextPage && !searchQuery && (
+      {hasNextPage && (
         <div className="flex justify-center">
           {isFetchingNextPage ? (
             <Loader2 className="h-6 w-6 text-zinc-500 animate-spin my-4" />
@@ -201,30 +149,36 @@ const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
         </div>
       )}
       <div className="flex flex-col-reverse mt-auto">
-        {messagesToDisplay?.map((message: MessageWithMemberWithProfile) => (
-          <ChatItem
-            key={message.id}
-            id={message.id}
-            currentMember={member}
-            member={message.member}
-            content={message.content}
-            fileUrl={message.fileUrl}
-            deleted={message.deleted}
-            timestamp={format(new Date(message.createdAt), DATE_FORMAT)}
-            isUpdated={message.updatedAt !== message.createdAt}
-            socketUrl={socketUrl}
-            socketQuery={socketQuery}
-            reactions={message.reactions} // Pass reactions to ChatItem
-            onReply={(msgId, content) => {/* handle reply logic */}}
-            onReaction={(msgId, emoji) => {/* handle reaction logic */}}
-          />
+        {data?.pages?.map((page, i) => (
+          <Fragment key={i}>
+            {page.items?.map((message: MessageWithMemberWithProfile) => {
+              if (!message.member || !member) {
+                return null;
+              }
+              return (
+                <ChatItem
+                  key={message.id}
+                  id={message.id}
+                  currentMember={member}
+                  member={message.member}
+                  content={message.content}
+                  fileUrl={message.fileUrl}
+                  deleted={message.deleted}
+                  timestamp={format(new Date(message.createdAt), DATE_FORMAT)}
+                  isUpdated={message.updatedAt !== message.createdAt}
+                  socketUrl={socketUrl}
+                  socketQuery={socketQuery}
+                  reactions={message.reactions ?? []}
+                  onReaction={handleReaction}
+                />
+              );
+            })}
+          </Fragment>
         ))}
       </div>
       <div ref={bottomRef} />
     </div>
-  );
-});
+  )
+})
 
 ChatMessages.displayName = "ChatMessages";
-
-export default ChatMessages;

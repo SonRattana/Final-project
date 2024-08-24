@@ -41,7 +41,8 @@ export async function GET(
             include: {
               profile: true,
             }
-          }
+          },
+          reactions: true, // Thêm dòng này để bao gồm reactions
         },
         orderBy: {
           createdAt: "desc",
@@ -58,7 +59,8 @@ export async function GET(
             include: {
               profile: true,
             }
-          }
+          },
+          reactions: true, // Thêm dòng này để bao gồm reactions
         },
         orderBy: {
           createdAt: "desc",

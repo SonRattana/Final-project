@@ -27,6 +27,7 @@ export default async function handler(
         addTrailingSlash: false,
       });
       res.socket.server.io = io;
+      console.log("Socket.IO server initialized");
     }
 
     const profile = await currentProfilePages(req);
@@ -40,9 +41,13 @@ export default async function handler(
       return res.status(400).json({ error: "Message ID missing" });
     }
 
+    console.log("Received reaction request:", { emoji, messageId });
+
     const message = await db.message.findFirst({
       where: { id: messageId as string },
     });
+
+    console.log("Found message:", message);
 
     if (!message) {
       return res.status(404).json({ message: "Message not found" });
@@ -55,9 +60,12 @@ export default async function handler(
       },
     });
 
+    console.log("Existing reaction:", existingReaction);
+
     let updatedReaction;
 
     if (existingReaction) {
+      console.log("Updating existing reaction");
       updatedReaction = await db.reaction.update({
         where: {
           id: existingReaction.id,
@@ -66,7 +74,9 @@ export default async function handler(
           count: existingReaction.count + 1,
         },
       });
+      console.log("Updated reaction:", updatedReaction);
     } else {
+      console.log("Creating new reaction");
       updatedReaction = await db.reaction.create({
         data: {
           emoji: emoji,
@@ -74,6 +84,7 @@ export default async function handler(
           messageId: messageId as string,
         },
       });
+      console.log("Created reaction:", updatedReaction);
     }
 
     const updatedReactions = await db.reaction.findMany({
@@ -82,14 +93,32 @@ export default async function handler(
       },
     });
 
+    console.log("Emitting update event:", {
+      channelId: message.channelId,
+      messageData: {
+        ...message,
+        reactions: updatedReactions,
+      },
+    });
+
     res.socket.server.io?.emit(`chat:${message.channelId}:messages:update`, {
       ...message,
       reactions: updatedReactions,
     });
 
+    // Emit sự kiện Socket.IO
+    res.socket.server.io?.to(message.channelId).emit('new_reaction', {
+      messageId,
+      reactions: updatedReactions
+    });
+
     return res.status(200).json(updatedReactions);
   } catch (error) {
-    console.log("[REACTION_POST]", error);
-    return res.status(500).json({ message: "Internal Error" });
+    console.error("[REACTION_POST] Error details: ", error);
+    if (error instanceof Error) {
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+    }
+    return res.status(500).json({ message: "Internal Error", error: error instanceof Error ? error.message : String(error) });
   }
 }
