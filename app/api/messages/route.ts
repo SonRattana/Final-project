@@ -42,7 +42,7 @@ export async function GET(
               profile: true,
             }
           },
-          reactions: true, // Thêm dòng này để bao gồm reactions
+          reactions: true, 
         },
         orderBy: {
           createdAt: "desc",
@@ -60,7 +60,7 @@ export async function GET(
               profile: true,
             }
           },
-          reactions: true, // Thêm dòng này để bao gồm reactions
+          reactions: true, 
         },
         orderBy: {
           createdAt: "desc",

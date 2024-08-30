@@ -82,6 +82,7 @@ export default async function handler(
           emoji: emoji,
           count: 1,
           messageId: messageId as string,
+          
         },
       });
       console.log("Created reaction:", updatedReaction);
@@ -106,7 +107,7 @@ export default async function handler(
       reactions: updatedReactions,
     });
 
-    // Emit sự kiện Socket.IO
+    
     res.socket.server.io?.to(message.channelId).emit('new_reaction', {
       messageId,
       reactions: updatedReactions

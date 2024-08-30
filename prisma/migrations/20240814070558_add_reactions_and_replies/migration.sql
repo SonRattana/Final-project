@@ -76,8 +76,11 @@ CREATE TABLE "Reaction" (
     "emoji" TEXT NOT NULL,
     "count" INTEGER NOT NULL DEFAULT 1,
     "messageId" TEXT NOT NULL,
+    "memberId" TEXT NOT NULL,
 
-    CONSTRAINT "Reaction_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Reaction_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "Reaction_messageId_emoji_memberId_key" UNIQUE ("messageId", "emoji", "memberId"),
+    CONSTRAINT "Reaction_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "Member"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -131,9 +134,6 @@ CREATE INDEX "Message_channelId_idx" ON "Message"("channelId");
 CREATE INDEX "Message_memberId_idx" ON "Message"("memberId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Reaction_messageId_emoji_key" ON "Reaction"("messageId", "emoji");
-
--- CreateIndex
 CREATE INDEX "Coversation_memberTwoId_idx" ON "Coversation"("memberTwoId");
 
 -- CreateIndex
@@ -168,9 +168,6 @@ ALTER TABLE "Message" ADD CONSTRAINT "Message_channelId_fkey" FOREIGN KEY ("chan
 
 -- AddForeignKey
 ALTER TABLE "Message" ADD CONSTRAINT "Message_replyToMessageId_fkey" FOREIGN KEY ("replyToMessageId") REFERENCES "Message"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "Reaction" ADD CONSTRAINT "Reaction_messageId_fkey" FOREIGN KEY ("messageId") REFERENCES "Message"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Coversation" ADD CONSTRAINT "Coversation_memberOneId_fkey" FOREIGN KEY ("memberOneId") REFERENCES "Member"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -13,7 +13,7 @@ import { useRouter, useParams } from "next/navigation";
 import { UserAvatar } from "@/components/user-avatar";
 import { ActionTooltip } from "@/components/action-tooltip";
 import { cn } from "@/lib/utils";
-import React, { MouseEventHandler } from 'react';
+import React, { MouseEventHandler, ReactNode } from 'react';
 import {
   Form,
   FormControl,
@@ -24,6 +24,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useModal } from "@/hooks/use-modal-store";
 import { EmojiPicker } from "@/components/emoji-picker";
+
+interface Reaction {
+  emoji: string;
+  count: number;
+  members?: { id: string; name: string; imageUrl: string }[];
+}
 
 interface ChatItemProps {
   id: string;
@@ -42,12 +48,7 @@ interface ChatItemProps {
   onReply?: (messageId: string, content: string) => void;
   replyTo?: ChatItemProps | null;
   onReaction: (messageId: string, emoji: string) => void;
-  reactions?: Reaction[]; // Sử dụng kiểu Reaction[] cho reactions
-}
-
-interface Reaction {
-  emoji: string;
-  count: number;
+  reactions?: Reaction[];
 }
 
 const roleIconMap = {
@@ -59,6 +60,8 @@ const roleIconMap = {
 const formSchema = z.object({
   content: z.string().min(1),
 });
+
+const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "😡"];
 
 export const ChatItem = ({
   id,
@@ -75,11 +78,13 @@ export const ChatItem = ({
   onReply,
   replyTo = null,
   onReaction,
-  reactions = [], // Khởi tạo mặc định cho reactions
+  reactions = [],
 }: ChatItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
-  const [localReactions, setLocalReactions] = useState<Reaction[]>(reactions); // Sử dụng local state cho reactions
+  const [localReactions, setLocalReactions] = useState<Reaction[]>(reactions);
+  const [showEmojiMenu, setShowEmojiMenu] = useState(false);
+  const [reactionMembers, setReactionMembers] = useState<Record<string, { id: string; name: string; imageUrl: string }[]>>({});
   const { onOpen } = useModal();
   const params = useParams();
   const router = useRouter();
@@ -150,7 +155,6 @@ export const ChatItem = ({
 
   const handleAddReaction = async (emoji: string) => {
     try {
-      // Cập nhật UI ngay lập tức
       setLocalReactions((prevReactions) => {
         const existingReaction = prevReactions.find((r) => r.emoji === emoji);
         if (existingReaction) {
@@ -162,18 +166,41 @@ export const ChatItem = ({
         }
       });
 
-      // Gọi API để cập nhật server
       await axios.post('/api/socket/reaction', {
         messageId: id,
         emoji
       });
 
-      // Không cần cập nhật localReactions ở đây vì sẽ nhận update qua socket
+      setShowEmojiMenu(false);
     } catch (error) {
-      console.error("Lỗi khi thêm reaction:", error);
-      setLocalReactions(reactions); // Revert nếu có lỗi
+      console.error("error add reaction:", error);
+      setLocalReactions(reactions);
     }
   };
+
+  const handleShowReactionMembers = async (emoji: string) => {
+    try {
+      const response = await axios.get(`/api/socket/reaction`, {
+        params: {
+          messageId: id,
+          emoji: encodeURIComponent(emoji)
+        }
+      });
+      setReactionMembers(prev => ({ ...prev, [emoji]: response.data }));
+    } catch (error) {
+      console.error("error show reaction members:", error);
+    }
+  };
+
+  useEffect(() => {
+    const closeEmojiMenu = (e: MouseEvent) => {
+      if (showEmojiMenu && !(e.target as HTMLElement).closest('.emoji-menu')) {
+        setShowEmojiMenu(false);
+      }
+    };
+    document.addEventListener('click', closeEmojiMenu);
+    return () => document.removeEventListener('click', closeEmojiMenu);
+  }, [showEmojiMenu]);
 
   return (
     <div id={id} className="chat-item relative group flex items-center hover:bg-black/5 p-4 transition w-full" onClick={onClick}>
@@ -237,15 +264,24 @@ export const ChatItem = ({
                 )}
               </p>
               <div className="flex flex-wrap mt-1">
-                {localReactions.map(({ emoji, count }) => (
-                  <button
+                {localReactions.map(({ emoji, count, members }) => (
+                  <ActionTooltip
                     key={emoji}
-                    onClick={() => handleAddReaction(emoji)}
-                    className="flex items-center space-x-1 bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-1 text-sm mr-2 mb-2 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                    label={
+                      <div>
+                        {members?.map(member => <div key={member.id}>{member.name}</div>)}
+                      </div>
+                    }
                   >
-                    <span>{emoji}</span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">{count}</span>
-                  </button>
+                    <button
+                      onClick={() => handleAddReaction(emoji)}
+                      onMouseEnter={() => handleShowReactionMembers(emoji)}
+                      className="flex items-center space-x-1 bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-1 text-sm mr-2 mb-2 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                    >
+                      <span>{emoji}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{count}</span>
+                    </button>
+                  </ActionTooltip>
                 ))}
               </div>
             </div>
@@ -285,20 +321,32 @@ export const ChatItem = ({
         </div>
       </div>
       <div className="hidden group-hover:flex items-center gap-x-2 absolute p-1 -top-2 right-5 bg-white dark:bg-zinc-800 border rounded-sm">
-        {/* {canReplyMessage && (
-          <ActionTooltip label="Reply">
-            <Reply
-              onClick={() => setIsReplying(true)}
+        <div className="relative">
+          <ActionTooltip label="React">
+            <Smile
+              onClick={() => setShowEmojiMenu(!showEmojiMenu)}
               className="cursor-pointer ml-auto w-4 h-4 text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
             />
           </ActionTooltip>
-        )} */}
-        <ActionTooltip label="React">
-          <Smile
-            onClick={() => handleAddReaction("👍")}
-            className="cursor-pointer ml-auto w-4 h-4 text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
-          />
-        </ActionTooltip>
+          {showEmojiMenu && (
+            <div className="absolute right-0 mt-2 bg-white dark:bg-zinc-800 border rounded-md shadow-lg p-2 z-10">
+              <div className="flex space-x-2">
+                {commonEmojis.map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => {
+                      handleAddReaction(emoji);
+                      setShowEmojiMenu(false);
+                    }}
+                    className="hover:bg-gray-100 dark:hover:bg-zinc-700 p-1 rounded-full"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         {canEditMessage && (
           <ActionTooltip label="Edit">
             <Edit

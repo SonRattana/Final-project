@@ -2,7 +2,7 @@
 
 import { useRef, useCallback } from "react";
 import { ChatHeader } from "@/components/chat/chat-header";
-import ChatMessages, { ChatMessagesRef } from "@/components/chat/chat-messages";
+import { ChatMessages,  ChatMessagesRef } from "@/components/chat/chat-messages";
 import { ChatInput } from "@/components/chat/chat-input";
 import { MediaRoom } from "@/components/media-room";
 import ClientChatHeader from "./client-chat-header";

@@ -168,7 +168,7 @@ export const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
                   isUpdated={message.updatedAt !== message.createdAt}
                   socketUrl={socketUrl}
                   socketQuery={socketQuery}
-                  reactions={message.reactions ?? []}
+                  reactions={message.reactions}
                   onReaction={handleReaction}
                 />
               );
