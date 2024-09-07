@@ -8,6 +8,8 @@ import {
 } from "@prisma/client";
 import { Edit, Hash, Lock, Mic, Trash, Video } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import axios from "axios";
 
 import { cn } from "@/lib/utils";
 import { ActionTooltip } from "@/components/action-tooltip";
@@ -17,6 +19,7 @@ interface ServerChannelProps {
   channel: Channel;
   server: Server;
   role?: MemberRole;
+  userId: string;
 }
 
 const iconMap = {
@@ -28,22 +31,55 @@ const iconMap = {
 export const ServerChannel = ({
   channel,
   server,
-  role
+  role,
+  userId
 }: ServerChannelProps) => {
   const { onOpen } = useModal();
   const params = useParams();
   const router = useRouter();
 
-  const Icon = iconMap[channel.type];
+  const [unreadCount, setUnreadCount] = useState<number>(0);
 
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await axios.post(`/api/channels/${channel.id}`, { userId });
+        setUnreadCount(response.data.unreadCount);
+      } catch (error) {
+        console.error("Failed to fetch unread count:", error);
+      }
+    };
+
+    fetchUnreadCount();
+  }, [channel.id, userId]);
+
+  // Function to mark notifications as read when the channel is clicked
+  const markAsRead = async () => {
+    try {
+      const response = await axios.post("/api/socket/notifications/mark-as-read", {
+        userId,
+        channelId: channel.id,
+      });
+  
+      if (response.status === 200) {
+        setUnreadCount(0); // Remove the unread badge if successful
+      }
+    } catch (error) {
+      console.error("Failed to mark notifications as read:", error);
+    }
+  };
+  
   const onClick = () => {
-    router.push(`/servers/${params?.serverId}/channels/${channel.id}`)
-  }
+    markAsRead();  // Mark notifications as read when user clicks the channel
+    router.push(`/servers/${params?.serverId}/channels/${channel.id}`);
+  };
 
   const onAction = (e: React.MouseEvent, action: ModalType) => {
     e.stopPropagation();
     onOpen(action, { channel, server });
   }
+
+  const Icon = iconMap[channel.type];
 
   return (
     <button
@@ -60,6 +96,11 @@ export const ServerChannel = ({
       )}>
         {channel.name}
       </p>
+      {unreadCount > 0 && (
+        <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
+          {unreadCount}
+        </span>
+      )}
       {channel.name !== "general" && role !== MemberRole.GUEST && (
         <div className="ml-auto flex items-center gap-x-2">
           <ActionTooltip label="Edit">
@@ -82,5 +123,5 @@ export const ServerChannel = ({
         />
       )}
     </button>
-  )
-}
+  );
+};

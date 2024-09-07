@@ -88,6 +88,23 @@ export default async function handler(
 
     res?.socket?.server?.io?.emit(channelKey, message);
 
+    
+    const notifications = server.members
+      .filter((m) => m.profileId !== profile.id)
+      .map((m) => ({
+        userId: m.profileId,
+        message: `New message in ${channel.name} from ${profile.name}: ${content}`,
+        channelId: channelId as string, 
+      }));
+
+    await db.notification.createMany({
+      data: notifications,
+    });
+
+    notifications.forEach((notification) => {
+      res?.socket?.server?.io?.to(notification.userId).emit("new_notification", notification);
+    });
+
     return res.status(200).json(message);
   } catch (error) {
     console.log("[MESSAGES_POST]", error);

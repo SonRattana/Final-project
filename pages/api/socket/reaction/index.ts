@@ -1,8 +1,8 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { db } from "@/lib/db";
-import { currentProfilePages } from "@/lib/current-profile-pages";
-import { Server as HttpServer } from "http";
+import { db } from "@/lib/db";  
+import { currentProfilePages } from "@/lib/current-profile-pages";  
 import { Server as SocketIOServer } from "socket.io";
+import { Server as HttpServer } from "http";
 
 type NextApiResponseWithSocket = NextApiResponse & {
   socket: {
@@ -12,114 +12,108 @@ type NextApiResponseWithSocket = NextApiResponse & {
   };
 };
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponseWithSocket
-) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+export default async function handler(req: NextApiRequest, res: NextApiResponseWithSocket) {
+  if (req.method === "POST") {
+    const { messageId, emoji } = req.body;
 
-  try {
-    if (!res.socket.server.io) {
-      const io = new SocketIOServer(res.socket.server, {
-        path: "/api/socketio",
-        addTrailingSlash: false,
-      });
-      res.socket.server.io = io;
-      console.log("Socket.IO server initialized");
+    if (!messageId || !emoji) {
+      return res.status(400).json({ error: "Missing messageId or emoji" });
     }
 
-    const profile = await currentProfilePages(req);
-    const { emoji, messageId } = req.body;
+    try {
+      const profile = await currentProfilePages(req); 
+      if (!profile) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
 
-    if (!profile) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
+      
+      if (!res.socket.server.io) {
+        const io = new SocketIOServer(res.socket.server, {
+          path: "/api/socketio",
+        });
+        res.socket.server.io = io;
+      }
 
-    if (!messageId) {
-      return res.status(400).json({ error: "Message ID missing" });
-    }
-
-    console.log("Received reaction request:", { emoji, messageId });
-
-    const message = await db.message.findFirst({
-      where: { id: messageId as string },
-    });
-
-    console.log("Found message:", message);
-
-    if (!message) {
-      return res.status(404).json({ message: "Message not found" });
-    }
-
-    const existingReaction = await db.reaction.findFirst({
-      where: {
-        messageId: messageId as string,
-        emoji: emoji,
-      },
-    });
-
-    console.log("Existing reaction:", existingReaction);
-
-    let updatedReaction;
-
-    if (existingReaction) {
-      console.log("Updating existing reaction");
-      updatedReaction = await db.reaction.update({
+      
+      const existingReaction = await db.reaction.findFirst({
         where: {
-          id: existingReaction.id,
-        },
-        data: {
-          count: existingReaction.count + 1,
-        },
-      });
-      console.log("Updated reaction:", updatedReaction);
-    } else {
-      console.log("Creating new reaction");
-      updatedReaction = await db.reaction.create({
-        data: {
-          emoji: emoji,
-          count: 1,
-          messageId: messageId as string,
-          
+          messageId,
+          emoji,
+          profileId: profile.id,
         },
       });
-      console.log("Created reaction:", updatedReaction);
-    }
 
-    const updatedReactions = await db.reaction.findMany({
-      where: {
-        messageId: messageId as string,
-      },
-    });
+      let updatedReaction;
+      if (existingReaction) {
+        // If reaction exists, increase the count
+        updatedReaction = await db.reaction.update({
+          where: {
+            id: existingReaction.id,
+          },
+          data: {
+            count: existingReaction.count + 1,
+          },
+        });
+      } else {
+        // Create new reaction if it doesn't exist
+        updatedReaction = await db.reaction.create({
+          data: {
+            messageId,
+            emoji,
+            count: 1,
+            profileId: profile.id,
+          },
+        });
+      }
 
-    console.log("Emitting update event:", {
-      channelId: message.channelId,
-      messageData: {
-        ...message,
+      // Fetch all reactions for the message
+      const updatedReactions = await db.reaction.findMany({
+        where: { messageId },
+        include: { profile: true },  // Include profile information in the result
+      });
+
+      // Emit a "reaction_added" event to all connected clients (real-time update)
+      res.socket.server.io.emit("reaction_added", {
+        messageId,
         reactions: updatedReactions,
-      },
-    });
+      });
 
-    res.socket.server.io?.emit(`chat:${message.channelId}:messages:update`, {
-      ...message,
-      reactions: updatedReactions,
-    });
-
-    
-    res.socket.server.io?.to(message.channelId).emit('new_reaction', {
-      messageId,
-      reactions: updatedReactions
-    });
-
-    return res.status(200).json(updatedReactions);
-  } catch (error) {
-    console.error("[REACTION_POST] Error details: ", error);
-    if (error instanceof Error) {
-      console.error("Error message:", error.message);
-      console.error("Error stack:", error.stack);
+      return res.status(200).json(updatedReactions);
+    } catch (error) {
+      console.error("[REACTION_POST] Error: ", error);
+      return res.status(500).json({ error: "Failed to add reaction" });
     }
-    return res.status(500).json({ message: "Internal Error", error: error instanceof Error ? error.message : String(error) });
+  } else if (req.method === "GET") {
+    // Handle GET request to fetch members who reacted with a specific emoji
+    const { messageId, emoji } = req.query;
+
+    if (!messageId || !emoji) {
+      return res.status(400).json({ error: "Missing messageId or emoji" });
+    }
+
+    try {
+      const reactions = await db.reaction.findMany({
+        where: {
+          messageId: messageId as string,
+          emoji: emoji as string,
+        },
+        include: {
+          profile: true,
+        },
+      });
+
+      const members = reactions.map((reaction) => ({
+        id: reaction.profile.id,
+        name: reaction.profile.name,
+        imageUrl: reaction.profile.imageUrl,
+      }));
+
+      return res.status(200).json(members);
+    } catch (error) {
+      console.error("[REACTION_GET] Error: ", error);
+      return res.status(500).json({ error: "Failed to fetch reaction members" });
+    }
+  } else {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 }

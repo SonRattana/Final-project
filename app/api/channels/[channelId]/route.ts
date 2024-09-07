@@ -4,6 +4,14 @@ import { MemberRole } from "@prisma/client";
 import { currentProfile } from "@/lib/current-profile";
 import { db } from "@/lib/db";
 
+interface Notification {
+  userId: string;
+  message: string;
+  channelId: string;
+  createdAt: Date;
+  read: boolean;
+}
+
 export async function DELETE(
   req: Request,
   { params }: { params: { channelId: string } }
@@ -47,7 +55,27 @@ export async function DELETE(
             }
           }
         }
+      },
+      include: {
+        members: true, 
       }
+    });
+
+    
+    const notifications: Notification[] = server.members.map((m) => ({
+      userId: m.profileId,
+      message: `Channel ${params.channelId} has been deleted by ${profile.name}`,
+      channelId: params.channelId,
+      createdAt: new Date(), 
+      read: false, 
+    }));
+
+    await db.notification.createMany({
+      data: notifications,
+    });
+
+    notifications.forEach((notification) => {
+      sendNotification(notification.userId, notification.message);
     });
 
     return NextResponse.json(server);
@@ -111,12 +139,63 @@ export async function PATCH(
             }
           }
         }
+      },
+      include: {
+        members: true, 
       }
+    });
+
+    const notifications: Notification[] = server.members.map((m) => ({
+      userId: m.profileId,
+      message: `Channel ${params.channelId} has been updated by ${profile.name}`,
+      channelId: params.channelId,
+      createdAt: new Date(), 
+      read: false, 
+    }));
+
+    await db.notification.createMany({
+      data: notifications,
+    });
+
+    notifications.forEach((notification) => {
+      sendNotification(notification.userId, notification.message);
     });
 
     return NextResponse.json(server);
   } catch (error) {
     console.log("[CHANNEL_ID_PATCH]", error);
     return new NextResponse("Internal Error", { status: 500 });
+  }
+}
+
+export async function POST(req: Request, { params }: { params: { channelId: string } }) {
+  const { channelId } = params;
+  const { userId } = await req.json();
+
+  if (!channelId || !userId) {
+    return NextResponse.json({ error: "Missing channelId or userId" }, { status: 400 });
+  }
+
+  try {
+    const unreadCount = await db.notification.count({
+      where: {
+        userId: userId,
+        read: false,
+        channelId: channelId,
+      },
+    });
+
+    return NextResponse.json({ unreadCount }, { status: 200 });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
+
+
+function sendNotification(userId: string, message: string) {
+  const io = (global as any).io; 
+  if (io) {
+    io.to(userId).emit("new_notification", { message });
   }
 }

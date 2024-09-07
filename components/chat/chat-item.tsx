@@ -191,6 +191,7 @@ export const ChatItem = ({
       console.error("error show reaction members:", error);
     }
   };
+  
 
   useEffect(() => {
     const closeEmojiMenu = (e: MouseEvent) => {

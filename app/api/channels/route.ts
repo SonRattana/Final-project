@@ -24,17 +24,7 @@ export async function POST(
       return new NextResponse("Name cannot be 'general'", { status: 400 });
     }
 
-    // // Check if channel name already exists in the server
-    // const existingChannel = await db.channel.findFirst({
-    //   where: {
-    //     serverId: serverId,
-    //     name: name
-    //   }
-    // });
-
-    // if (existingChannel) {
-    //   return new NextResponse("Channel name already exists", { status: 400 });
-    // }
+   
 
     const server = await db.server.update({
       where: {
@@ -65,3 +55,15 @@ export async function POST(
     return new NextResponse("Internal Error", { status: 500 });
   }
 }
+
+ // // Check if channel name already exists in the server
+    // const existingChannel = await db.channel.findFirst({
+    //   where: {
+    //     serverId: serverId,
+    //     name: name
+    //   }
+    // });
+
+    // if (existingChannel) {
+    //   return new NextResponse("Channel name already exists", { status: 400 });
+    // }

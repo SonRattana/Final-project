@@ -18,6 +18,8 @@ model Profile {
   server    Server[]
   members   Member[]
   channels  Channel[]
+  notifications Notification[] // Relation to Notification
+  reactions Reaction[] // Relation to Reaction (new)
 
   createAt  DateTime @default(now())
   updateAt  DateTime @updatedAt
@@ -89,7 +91,7 @@ model Channel {
   messages  Message[]
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now())
 
   @@index([profileId])
   @@index([serverId])
@@ -129,9 +131,11 @@ model Reaction {
   messageId String
   message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
-  @@unique([messageId, emoji]) // Use @@unique instead of @@index with unique: true
-}
+  profileId String   
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade) 
 
+  @@unique([messageId, emoji, profileId])  
+}
 
 model Coversation {
   id              String   @id @default(uuid())
@@ -165,4 +169,17 @@ model DirectMessage {
 
   @@index([memberId])
   @@index([conversationId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  message   String
+  createdAt DateTime @default(now())
+  read      Boolean  @default(false)
+  channelId String   // Add channelId
+
+  user      Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

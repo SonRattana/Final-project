@@ -78,7 +78,7 @@ export const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
         channelId: socketQuery.channelId
       });
     } catch (error) {
-      console.error("Lỗi khi thêm reaction:", error);
+      console.error("error when add reaction:", error);
     }
   }, [socketQuery.serverId, socketQuery.channelId]);
 

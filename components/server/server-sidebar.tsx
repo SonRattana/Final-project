@@ -67,7 +67,7 @@ export const ServerSidebar = async ({
   if (!server) {
     return redirect("/");
   }
-
+  
   const role = server.members.find((member) => member.profileId === profile.id)?.role;
 
   return (
@@ -135,6 +135,7 @@ export const ServerSidebar = async ({
                   channel={channel}
                   role={role}
                   server={server}
+                  userId={profile.id} 
                 />
               ))}
             </div>
@@ -155,6 +156,7 @@ export const ServerSidebar = async ({
                   channel={channel}
                   role={role}
                   server={server}
+                  userId={profile.id} 
                 />
               ))}
             </div>
@@ -175,6 +177,7 @@ export const ServerSidebar = async ({
                   channel={channel}
                   role={role}
                   server={server}
+                  userId={profile.id} 
                 />
               ))}
             </div>
