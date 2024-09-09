@@ -26,53 +26,66 @@ export default async function handler(req: NextApiRequest, res: NextApiResponseW
         return res.status(401).json({ error: "Unauthorized" });
       }
 
-      
+      // Initialize Socket.IO if not already running
       if (!res.socket.server.io) {
         const io = new SocketIOServer(res.socket.server, {
-          path: "/api/socketio",
+          path: "/api/socket/io",
         });
         res.socket.server.io = io;
       }
 
-      
-      const existingReaction = await db.reaction.findFirst({
-        where: {
-          messageId,
-          emoji,
-          profileId: profile.id,
-        },
-      });
-
-      let updatedReaction;
-      if (existingReaction) {
-        // If reaction exists, increase the count
-        updatedReaction = await db.reaction.update({
+      // Use transaction to ensure atomicity when merging reactions
+      await db.$transaction(async (prisma) => {
+        const existingReaction = await prisma.reaction.findFirst({
           where: {
-            id: existingReaction.id,
-          },
-          data: {
-            count: existingReaction.count + 1,
-          },
-        });
-      } else {
-        // Create new reaction if it doesn't exist
-        updatedReaction = await db.reaction.create({
-          data: {
             messageId,
             emoji,
-            count: 1,
             profileId: profile.id,
           },
         });
-      }
 
-      // Fetch all reactions for the message
+        if (existingReaction) {
+          // If reaction exists, increment the count for the same emoji
+          await prisma.reaction.update({
+            where: {
+              id: existingReaction.id,
+            },
+            data: {
+              count: existingReaction.count + 1,
+            },
+          });
+        } else {
+          // Create a new reaction if it doesn't exist
+          await prisma.reaction.create({
+            data: {
+              messageId,
+              emoji,
+              count: 1,
+              profileId: profile.id,
+            },
+          });
+        }
+
+        // Now merge all reactions for the same emoji (this will sum up counts)
+        const mergedReactions = await prisma.reaction.groupBy({
+          by: ['emoji'],
+          where: { messageId },
+          _sum: {
+            count: true,
+          },
+        });
+
+        // Optionally, you can handle merging user profiles related to each emoji
+        // but for now, we are only merging the count.
+      });
+
+      // Fetch updated reactions with merged counts from the database
       const updatedReactions = await db.reaction.findMany({
         where: { messageId },
         include: { profile: true },  // Include profile information in the result
       });
 
-      // Emit a "reaction_added" event to all connected clients (real-time update)
+      // Emit the "reaction_added" event with updated reactions
       res.socket.server.io.emit("reaction_added", {
         messageId,
         reactions: updatedReactions,

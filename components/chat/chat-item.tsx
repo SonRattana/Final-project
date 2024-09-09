@@ -6,20 +6,23 @@ import qs from "query-string";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Member, MemberRole, Profile } from "@prisma/client";
-import { Edit, FileIcon, ShieldAlert, ShieldCheck, Trash, Reply, Smile } from "lucide-react";
+import {
+  Edit,
+  FileIcon,
+  ShieldAlert,
+  ShieldCheck,
+  Trash,
+  Reply,
+  Smile,
+} from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { UserAvatar } from "@/components/user-avatar";
 import { ActionTooltip } from "@/components/action-tooltip";
 import { cn } from "@/lib/utils";
-import React, { MouseEventHandler, ReactNode } from 'react';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-} from "@/components/ui/form";
+import React, { MouseEventHandler, ReactNode } from "react";
+import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useModal } from "@/hooks/use-modal-store";
@@ -52,9 +55,9 @@ interface ChatItemProps {
 }
 
 const roleIconMap = {
-  "GUEST": null,
-  "MODERATOR": <ShieldCheck className="h-4 w-4 ml-2 text-yellow-500" />,
-  "ADMIN": <ShieldAlert className="h-4 w-4 ml-2 text-green-500" />,
+  GUEST: null,
+  MODERATOR: <ShieldCheck className="h-4 w-4 ml-2 text-yellow-500" />,
+  ADMIN: <ShieldAlert className="h-4 w-4 ml-2 text-green-500" />,
 };
 
 const formSchema = z.object({
@@ -84,7 +87,9 @@ export const ChatItem = ({
   const [isReplying, setIsReplying] = useState(false);
   const [localReactions, setLocalReactions] = useState<Reaction[]>(reactions);
   const [showEmojiMenu, setShowEmojiMenu] = useState(false);
-  const [reactionMembers, setReactionMembers] = useState<Record<string, { id: string; name: string; imageUrl: string }[]>>({});
+  const [reactionMembers, setReactionMembers] = useState<
+    Record<string, { id: string; name: string; imageUrl: string }[]>
+  >({});
   const { onOpen } = useModal();
   const params = useParams();
   const router = useRouter();
@@ -166,9 +171,9 @@ export const ChatItem = ({
         }
       });
 
-      await axios.post('/api/socket/reaction', {
+      await axios.post("/api/socket/reaction", {
         messageId: id,
-        emoji
+        emoji,
       });
 
       setShowEmojiMenu(false);
@@ -183,36 +188,45 @@ export const ChatItem = ({
       const response = await axios.get(`/api/socket/reaction`, {
         params: {
           messageId: id,
-          emoji: encodeURIComponent(emoji)
-        }
+          emoji: encodeURIComponent(emoji),
+        },
       });
-      setReactionMembers(prev => ({ ...prev, [emoji]: response.data }));
+      setReactionMembers((prev) => ({ ...prev, [emoji]: response.data }));
     } catch (error) {
       console.error("error show reaction members:", error);
     }
   };
-  
 
   useEffect(() => {
     const closeEmojiMenu = (e: MouseEvent) => {
-      if (showEmojiMenu && !(e.target as HTMLElement).closest('.emoji-menu')) {
+      if (showEmojiMenu && !(e.target as HTMLElement).closest(".emoji-menu")) {
         setShowEmojiMenu(false);
       }
     };
-    document.addEventListener('click', closeEmojiMenu);
-    return () => document.removeEventListener('click', closeEmojiMenu);
+    document.addEventListener("click", closeEmojiMenu);
+    return () => document.removeEventListener("click", closeEmojiMenu);
   }, [showEmojiMenu]);
 
   return (
-    <div id={id} className="chat-item relative group flex items-center hover:bg-black/5 p-4 transition w-full" onClick={onClick}>
+    <div
+      id={id}
+      className="chat-item relative group flex items-center hover:bg-black/5 p-4 transition w-full"
+      onClick={onClick}
+    >
       <div className="group flex gap-x-2 items-start w-full">
-        <div onClick={onMemberClick} className="cursor-pointer hover:drop-shadow-md transition">
+        <div
+          onClick={onMemberClick}
+          className="cursor-pointer hover:drop-shadow-md transition"
+        >
           <UserAvatar src={member.profile.imageUrl} />
         </div>
         <div className="flex flex-col w-full">
           <div className="flex items-center gap-x-2">
             <div className="flex items-center">
-              <p onClick={onMemberClick} className="font-semibold text-sm hover:underline cursor-pointer">
+              <p
+                onClick={onMemberClick}
+                className="font-semibold text-sm hover:underline cursor-pointer"
+              >
                 {member.profile.name}
               </p>
               <ActionTooltip label={member.role}>
@@ -224,74 +238,62 @@ export const ChatItem = ({
             </span>
           </div>
           {isImage && (
-            <a
-              href={fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="relative aspect-square rounded-md mt-2 overflow-hidden border flex items-center bg-secondary h-48 w-48"
-            >
-              <Image
-                src={fileUrl}
-                alt={content}
-                fill
-                className="object-cover"
-              />
-            </a>
+            <div className="relative aspect-square rounded-md mt-2 overflow-hidden border flex items-center bg-secondary h-48 w-48">
+              <Image src={fileUrl} alt="Image" fill className="object-cover" />
+            </div>
           )}
-          {isPDF && (
-            <div className="relative flex items-center p-2 mt-2 rounded-md bg-background/10">
-              <FileIcon className="h-10 w-10 fill-indigo-200 stroke-indigo-400" />
-              <a
-                href={fileUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-2 text-sm text-indigo-500 dark:text-indigo-400 hover:underline"
+
+          {!isImage && (
+            <p className={cn("text-sm text-zinc-600 dark:text-zinc-300", deleted && "italic text-zinc-500 dark:text-zinc-400 text-xs mt-1")}>
+              {content}
+              {isUpdated && !deleted && (
+                <span className="text-[10px] mx-2 text-zinc-500 dark:text-zinc-400">(edited)</span>
+              )}
+            </p>
+          )}
+
+          {isImage && content && !content.startsWith("http") && (
+            <p className={cn("text-sm text-zinc-600 dark:text-zinc-300", deleted && "italic text-zinc-500 dark:text-zinc-400 text-xs mt-1")}>
+              {content}
+              {isUpdated && !deleted && (
+                <span className="text-[10px] mx-2 text-zinc-500 dark:text-zinc-400">(edited)</span>
+              )}
+            </p>
+          )}
+
+          {/* This reaction section should be added regardless of file presence */}
+          <div className="flex flex-wrap mt-1">
+            {localReactions.map(({ emoji, count, members }) => (
+              <ActionTooltip
+                key={emoji}
+                label={
+                  <div>
+                    {members?.map((member) => (
+                      <div key={member.id}>{member.name}</div>
+                    ))}
+                  </div>
+                }
               >
-                PDF File
-              </a>
-            </div>
-          )}
-          {!fileUrl && !isEditing && (
-            <div>
-              <p className={cn(
-                "text-sm text-zinc-600 dark:text-zinc-300",
-                deleted && "italic text-zinc-500 dark:text-zinc-400 text-xs mt-1"
-              )}>
-                {content}
-                {isUpdated && !deleted && (
-                  <span className="text-[10px] mx-2 text-zinc-500 dark:text-zinc-400">
-                    (edited)
+                <button
+                  onClick={() => handleAddReaction(emoji)}
+                  onMouseEnter={() => handleShowReactionMembers(emoji)}
+                  className="flex items-center space-x-1 bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-1 text-sm mr-2 mb-2 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                >
+                  <span>{emoji}</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {count}
                   </span>
-                )}
-              </p>
-              <div className="flex flex-wrap mt-1">
-                {localReactions.map(({ emoji, count, members }) => (
-                  <ActionTooltip
-                    key={emoji}
-                    label={
-                      <div>
-                        {members?.map(member => <div key={member.id}>{member.name}</div>)}
-                      </div>
-                    }
-                  >
-                    <button
-                      onClick={() => handleAddReaction(emoji)}
-                      onMouseEnter={() => handleShowReactionMembers(emoji)}
-                      className="flex items-center space-x-1 bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-1 text-sm mr-2 mb-2 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-                    >
-                      <span>{emoji}</span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{count}</span>
-                    </button>
-                  </ActionTooltip>
-                ))}
-              </div>
-            </div>
-          )}
+                </button>
+              </ActionTooltip>
+            ))}
+          </div>
+
           {!fileUrl && isEditing && (
             <Form {...form}>
               <form
                 className="flex items-center w-full gap-x-2 pt-2"
-                onSubmit={form.handleSubmit(onSubmit)}>
+                onSubmit={form.handleSubmit(onSubmit)}
+              >
                 <FormField
                   control={form.control}
                   name="content"
@@ -359,10 +361,12 @@ export const ChatItem = ({
         {canDeleteMessage && (
           <ActionTooltip label="Delete">
             <Trash
-              onClick={() => onOpen("deleteMessage", {
-                apiUrl: `${socketUrl}/${id}`,
-                query: socketQuery,
-              })}
+              onClick={() =>
+                onOpen("deleteMessage", {
+                  apiUrl: `${socketUrl}/${id}`,
+                  query: socketQuery,
+                })
+              }
               className="cursor-pointer ml-auto w-4 h-4 text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition"
             />
           </ActionTooltip>
