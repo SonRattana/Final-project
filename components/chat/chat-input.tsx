@@ -13,6 +13,7 @@ import {
   FormControl,
   FormField,
   FormItem,
+  FormMessage, // Import FormMessage
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useModal } from "@/hooks/use-modal-store";
@@ -26,7 +27,7 @@ interface ChatInputProps {
 }
 
 const formSchema = z.object({
-  content: z.string().min(1),
+  content: z.string().min(1, "Tin nhắn không được để trống"), // Thêm thông báo lỗi
 });
 
 export const ChatInput = ({
@@ -48,6 +49,13 @@ export const ChatInput = ({
   const isLoading = form.formState.isSubmitting;
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (!values.content.trim()) {
+      form.setError("content", {
+        type: "manual",
+        message: "Message cannot be empty!",
+      });
+      return;
+    }
     try {
       const url = qs.stringifyUrl({
         url: apiUrl,
@@ -86,7 +94,7 @@ export const ChatInput = ({
                     placeholder={`Message ${type === "conversation" ? name : "#" + name}`}
                     {...field}
                   />
-                  <div className="absolute top-7 right-16"> {/* Adjusted right position */}
+                  <div className="absolute top-7 right-16"> 
                     <EmojiPicker
                       onChange={(emoji: string) => field.onChange(`${field.value} ${emoji}`)}
                     />
@@ -100,6 +108,7 @@ export const ChatInput = ({
                   </button>
                 </div>
               </FormControl>
+              <FormMessage /> 
             </FormItem>
           )}
         />

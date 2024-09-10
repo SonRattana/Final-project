@@ -17,6 +17,8 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIo) => {
         const httpServer: NetServer = res.socket.server as any;
         const io = new ServerIO(httpServer, {
             path: "/api/socket/io",
+            pingInterval: 10000, // Default is 25000ms (25 seconds)
+            pingTimeout: 5000,
         });
 
         io.on("connection", (socket) => {
