@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useModal } from "@/hooks/use-modal-store";
 import { EmojiPicker } from "@/components/emoji-picker";
+import { io } from "socket.io-client";
 
 interface Reaction {
   emoji: string;
@@ -93,6 +94,30 @@ export const ChatItem = ({
   const { onOpen } = useModal();
   const params = useParams();
   const router = useRouter();
+  const [showAlert, setShowAlert] = useState(false);
+  useEffect(() => {
+    const socket = io(socketUrl, {
+      path: "/api/socket/io",
+      query: socketQuery,
+      transports: ["websocket", "polling"],
+    });
+
+    socket.on("reaction_added", ({ messageId, reactions }) => {
+      if (messageId === id) {
+        setLocalReactions(reactions);
+      }
+    });
+
+    socket.on("reaction_removed", ({ messageId, reactions }) => {
+      if (messageId === id) {
+        setLocalReactions(reactions);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [id, socketUrl, socketQuery]);
 
   const onMemberClick = () => {
     if (member.id === currentMember.id) {
@@ -183,6 +208,38 @@ export const ChatItem = ({
     }
   };
 
+  const handleRemoveReaction = async (emoji: string) => {
+    try {
+      // Tìm reaction dựa trên emoji và kiểm tra người dùng hiện tại có nằm trong danh sách những người đã thả reaction hay không
+      const reaction = localReactions.find((r) => r.emoji === emoji);
+
+      // Người dùng được phép xóa reaction của họ
+      setLocalReactions((prevReactions) => {
+        const existingReaction = prevReactions.find((r) => r.emoji === emoji);
+        if (existingReaction && existingReaction.count > 1) {
+          return prevReactions.map((r) =>
+            r.emoji === emoji ? { ...r, count: r.count - 1 } : r
+          );
+        } else {
+          return prevReactions.filter((r) => r.emoji !== emoji);
+        }
+      });
+
+      await axios.delete("/api/socket/reaction", {
+        data: {
+          messageId: id,
+          emoji,
+        },
+      });
+    } catch (error) {
+      setShowAlert(true);
+      setTimeout(() => {
+        setShowAlert(false);
+      }, 5000);
+      setLocalReactions(reactions);
+    }
+  };
+
   const handleShowReactionMembers = async (emoji: string) => {
     try {
       const response = await axios.get(`/api/socket/reaction`, {
@@ -244,48 +301,73 @@ export const ChatItem = ({
           )}
 
           {!isImage && (
-            <p className={cn("text-sm text-zinc-600 dark:text-zinc-300", deleted && "italic text-zinc-500 dark:text-zinc-400 text-xs mt-1")}>
+            <p
+              className={cn(
+                "text-sm text-zinc-600 dark:text-zinc-300",
+                deleted &&
+                  "italic text-zinc-500 dark:text-zinc-400 text-xs mt-1"
+              )}
+            >
               {content}
               {isUpdated && !deleted && (
-                <span className="text-[10px] mx-2 text-zinc-500 dark:text-zinc-400">(edited)</span>
+                <span className="text-[10px] mx-2 text-zinc-500 dark:text-zinc-400">
+                  (edited)
+                </span>
               )}
             </p>
           )}
 
           {isImage && content && !content.startsWith("http") && (
-            <p className={cn("text-sm text-zinc-600 dark:text-zinc-300", deleted && "italic text-zinc-500 dark:text-zinc-400 text-xs mt-1")}>
+            <p
+              className={cn(
+                "text-sm text-zinc-600 dark:text-zinc-300",
+                deleted &&
+                  "italic text-zinc-500 dark:text-zinc-400 text-xs mt-1"
+              )}
+            >
               {content}
               {isUpdated && !deleted && (
-                <span className="text-[10px] mx-2 text-zinc-500 dark:text-zinc-400">(edited)</span>
+                <span className="text-[10px] mx-2 text-zinc-500 dark:text-zinc-400">
+                  (edited)
+                </span>
               )}
             </p>
           )}
 
-          {/* This reaction section should be added regardless of file presence */}
           <div className="flex flex-wrap mt-1">
-            {localReactions.map(({ emoji, count, members }) => (
-              <ActionTooltip
-                key={emoji}
-                label={
-                  <div>
-                    {members?.map((member) => (
-                      <div key={member.id}>{member.name}</div>
-                    ))}
-                  </div>
+            {localReactions
+              .reduce<Reaction[]>((acc, { emoji, count, members }) => {
+                const existingReaction = acc.find((r) => r.emoji === emoji);
+                if (existingReaction) {
+                  existingReaction.count += count;
+                } else {
+                  acc.push({ emoji, count, members });
                 }
-              >
-                <button
-                  onClick={() => handleAddReaction(emoji)}
-                  onMouseEnter={() => handleShowReactionMembers(emoji)}
-                  className="flex items-center space-x-1 bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-1 text-sm mr-2 mb-2 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                return acc;
+              }, [])
+              .map(({ emoji, count, members }) => (
+                <ActionTooltip
+                  key={emoji}
+                  label={
+                    <div>
+                      {members?.map((member) => (
+                        <div key={member.id}>{member.name}</div>
+                      ))}
+                    </div>
+                  }
                 >
-                  <span>{emoji}</span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {count}
-                  </span>
-                </button>
-              </ActionTooltip>
-            ))}
+                  <button
+                    onClick={() => handleRemoveReaction(emoji)}
+                    onMouseEnter={() => handleShowReactionMembers(emoji)}
+                    className="flex items-center space-x-1 bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-1 text-sm mr-2 mb-2 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+                  >
+                    <span>{emoji}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {count}
+                    </span>
+                  </button>
+                </ActionTooltip>
+              ))}
           </div>
 
           {!fileUrl && isEditing && (
@@ -372,6 +454,58 @@ export const ChatItem = ({
           </ActionTooltip>
         )}
       </div>
+      {showAlert && (
+        <div className="flex flex-col gap-2 w-60 sm:w-72 text-[10px] sm:text-xs z-50">
+          <div
+            className="warning-alert cursor-default flex items-center justify-between w-full h-12 sm:h-14 rounded-lg px-[10px]
+    bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-200"
+          >
+            <div className="flex gap-2">
+              <div className="flex items-center justify-center bg-red-300 dark:bg-red-800 p-1 rounded-lg">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth="1.5"
+                  stroke="currentColor"
+                  className="w-8 h-8 text-red-600" 
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v2m0 4h.01M12 3.75a8.25 8.25 0 1 0 0 16.5 8.25 8.25 0 0 0 0-16.5z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <p className="text-red-800 dark:text-red-200">Warning</p>{" "}
+                <p className="text-red-600 dark:text-red-300">
+                  You can not delete this reaction from others!
+                </p>
+              </div>
+            </div>
+            <button
+              className="text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-800 p-1 rounded-md transition-colors ease-linear"
+              onClick={() => setShowAlert(false)}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth="1.5"
+                stroke="currentColor"
+                className="w-4 h-4"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M6 18 18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

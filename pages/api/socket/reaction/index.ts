@@ -13,6 +13,7 @@ type NextApiResponseWithSocket = NextApiResponse & {
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponseWithSocket) {
+ 
   if (req.method === "POST") {
     const { messageId, emoji } = req.body;
 
@@ -26,7 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponseW
         return res.status(401).json({ error: "Unauthorized" });
       }
 
-      // Initialize Socket.IO if not already running
+   
       if (!res.socket.server.io) {
         const io = new SocketIOServer(res.socket.server, {
           path: "/api/socket/io",
@@ -34,7 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponseW
         res.socket.server.io = io;
       }
 
-      // Use transaction to ensure atomicity when merging reactions
+      
       await db.$transaction(async (prisma) => {
         const existingReaction = await prisma.reaction.findFirst({
           where: {
@@ -45,7 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponseW
         });
 
         if (existingReaction) {
-          // If reaction exists, increment the count for the same emoji
+         
           await prisma.reaction.update({
             where: {
               id: existingReaction.id,
@@ -55,7 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponseW
             },
           });
         } else {
-          // Create a new reaction if it doesn't exist
+         
           await prisma.reaction.create({
             data: {
               messageId,
@@ -66,26 +67,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponseW
           });
         }
 
-        // Now merge all reactions for the same emoji (this will sum up counts)
-        const mergedReactions = await prisma.reaction.groupBy({
+        await prisma.reaction.groupBy({
           by: ['emoji'],
           where: { messageId },
           _sum: {
             count: true,
           },
         });
-
-        // Optionally, you can handle merging user profiles related to each emoji
-        // but for now, we are only merging the count.
       });
 
-      // Fetch updated reactions with merged counts from the database
+     
       const updatedReactions = await db.reaction.findMany({
         where: { messageId },
-        include: { profile: true },  // Include profile information in the result
+        include: { profile: true },  
       });
 
-      // Emit the "reaction_added" event with updated reactions
+      
       res.socket.server.io.emit("reaction_added", {
         messageId,
         reactions: updatedReactions,
@@ -96,8 +93,102 @@ export default async function handler(req: NextApiRequest, res: NextApiResponseW
       console.error("[REACTION_POST] Error: ", error);
       return res.status(500).json({ error: "Failed to add reaction" });
     }
-  } else if (req.method === "GET") {
-    // Handle GET request to fetch members who reacted with a specific emoji
+  }
+
+  
+  else if (req.method === "DELETE") {
+    const { messageId, emoji } = req.body;
+
+    if (!messageId || !emoji) {
+      return res.status(400).json({ error: "Missing messageId or emoji" });
+    }
+
+    try {
+      const profile = await currentProfilePages(req); 
+      if (!profile) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+     
+      if (!res.socket.server.io) {
+        const io = new SocketIOServer(res.socket.server, {
+          path: "/api/socket/io",
+        });
+        res.socket.server.io = io;
+      }
+
+      
+      await db.$transaction(async (prisma) => {
+        const existingReaction = await prisma.reaction.findFirst({
+          where: {
+            messageId,
+            emoji,
+            profileId: profile.id,
+          },
+          include: {
+            profile: true,  
+          },
+        });
+
+        if (!existingReaction) {
+          return res.status(404).json({ error: "Reaction not found" });
+        }
+
+        
+        if (existingReaction.profile.id !== profile.id) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+
+        if (existingReaction.count > 1) {
+          
+          await prisma.reaction.update({
+            where: {
+              id: existingReaction.id,
+            },
+            data: {
+              count: existingReaction.count - 1,
+            },
+          });
+        } else {
+          
+          await prisma.reaction.delete({
+            where: {
+              id: existingReaction.id,
+            },
+          });
+        }
+
+        
+        await prisma.reaction.groupBy({
+          by: ['emoji'],
+          where: { messageId },
+          _sum: {
+            count: true,
+          },
+        });
+      });
+
+      
+      const updatedReactions = await db.reaction.findMany({
+        where: { messageId },
+        include: { profile: true },  
+      });
+
+     
+      res.socket.server.io.emit("reaction_removed", {
+        messageId,
+        reactions: updatedReactions,
+      });
+
+      return res.status(200).json(updatedReactions);
+    } catch (error) {
+      console.error("[REACTION_DELETE] Error: ", error);
+      return res.status(500).json({ error: "Failed to remove reaction" });
+    }
+  }
+
+  
+  else if (req.method === "GET") {
     const { messageId, emoji } = req.query;
 
     if (!messageId || !emoji) {
@@ -126,7 +217,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponseW
       console.error("[REACTION_GET] Error: ", error);
       return res.status(500).json({ error: "Failed to fetch reaction members" });
     }
-  } else {
+  }
+
+  else {
     return res.status(405).json({ error: "Method not allowed" });
   }
 }

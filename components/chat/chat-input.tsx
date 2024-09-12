@@ -27,7 +27,7 @@ interface ChatInputProps {
 }
 
 const formSchema = z.object({
-  content: z.string().min(1, "Tin nhắn không được để trống"), // Thêm thông báo lỗi
+  content: z.string().min(1, "Message cannot be empty!"), 
 });
 
 export const ChatInput = ({
@@ -50,10 +50,7 @@ export const ChatInput = ({
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!values.content.trim()) {
-      form.setError("content", {
-        type: "manual",
-        message: "Message cannot be empty!",
-      });
+      
       return;
     }
     try {
@@ -108,7 +105,7 @@ export const ChatInput = ({
                   </button>
                 </div>
               </FormControl>
-              <FormMessage /> 
+              
             </FormItem>
           )}
         />
