@@ -83,10 +83,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponseW
       });
 
       
-      res.socket.server.io.emit("reaction_added", {
-        messageId,
-        reactions: updatedReactions,
-      });
+     
 
       return res.status(200).json(updatedReactions);
     } catch (error) {
@@ -175,10 +172,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponseW
       });
 
      
-      res.socket.server.io.emit("reaction_removed", {
-        messageId,
-        reactions: updatedReactions,
-      });
+     
 
       return res.status(200).json(updatedReactions);
     } catch (error) {

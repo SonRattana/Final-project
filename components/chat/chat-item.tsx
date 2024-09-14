@@ -28,7 +28,7 @@ import { Button } from "@/components/ui/button";
 import { useModal } from "@/hooks/use-modal-store";
 import { EmojiPicker } from "@/components/emoji-picker";
 import { io } from "socket.io-client";
-
+import { ImageModal } from "@/components/image-model";
 interface Reaction {
   emoji: string;
   count: number;
@@ -95,6 +95,8 @@ export const ChatItem = ({
   const params = useParams();
   const router = useRouter();
   const [showAlert, setShowAlert] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   useEffect(() => {
     const socket = io(socketUrl, {
       path: "/api/socket/io",
@@ -124,6 +126,16 @@ export const ChatItem = ({
       return;
     }
     router.push(`/servers/${params?.serverId}/conversations/${member.id}`);
+  };
+
+  const handleImageClick = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setIsModalOpen(true); 
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setSelectedImage(null);
   };
 
   useEffect(() => {
@@ -181,7 +193,8 @@ export const ChatItem = ({
   const canEditMessage = !deleted && isOwner && !fileUrl;
   const canReplyMessage = !deleted && currentMember.id !== member.id;
   const isPDF = fileType === "pdf" && fileUrl;
-  const isImage = !isPDF && fileUrl;
+  const isImage = !isPDF && fileUrl && !fileUrl.endsWith(".mp4") && !fileUrl.endsWith(".mov");
+  const isVideo = fileUrl && (fileUrl.endsWith(".mp4") || fileUrl.endsWith(".mov"));
 
   const handleAddReaction = async (emoji: string) => {
     try {
@@ -210,10 +223,10 @@ export const ChatItem = ({
 
   const handleRemoveReaction = async (emoji: string) => {
     try {
-      // Tìm reaction dựa trên emoji và kiểm tra người dùng hiện tại có nằm trong danh sách những người đã thả reaction hay không
+     
       const reaction = localReactions.find((r) => r.emoji === emoji);
 
-      // Người dùng được phép xóa reaction của họ
+   
       setLocalReactions((prevReactions) => {
         const existingReaction = prevReactions.find((r) => r.emoji === emoji);
         if (existingReaction && existingReaction.count > 1) {
@@ -295,12 +308,28 @@ export const ChatItem = ({
             </span>
           </div>
           {isImage && (
+            <div
+            className="relative aspect-square rounded-md mt-2 overflow-hidden border flex items-center bg-secondary h-48 w-48"
+            onClick={() => handleImageClick(fileUrl!)} 
+          >
+            <Image style={{cursor:"pointer"}} src={fileUrl} alt="Image" fill className="object-cover" />
+          </div>
+          )}
+           <ImageModal
+            isOpen={isModalOpen}
+            onClose={closeModal}
+            imageUrl={selectedImage!}
+          />
+          {isVideo && (
             <div className="relative aspect-square rounded-md mt-2 overflow-hidden border flex items-center bg-secondary h-48 w-48">
-              <Image src={fileUrl} alt="Image" fill className="object-cover" />
+              <video style={{cursor:"pointer"}} controls className="object-cover w-full h-full">
+                <source src={fileUrl} type={`video/${fileType}`} />
+                Your browser does not support the video tag.
+              </video>
             </div>
           )}
 
-          {!isImage && (
+          {!isImage && !isVideo && (
             <p
               className={cn(
                 "text-sm text-zinc-600 dark:text-zinc-300",
@@ -453,6 +482,7 @@ export const ChatItem = ({
             />
           </ActionTooltip>
         )}
+        
       </div>
       {showAlert && (
         <div className="flex flex-col gap-2 w-60 sm:w-72 text-[10px] sm:text-xs z-50">

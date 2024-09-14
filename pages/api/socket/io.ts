@@ -15,12 +15,13 @@ export default function handler(req: NextApiRequest, res: NextApiResponseWithSoc
     console.log("Initializing Socket.IO...");
     const io = new SocketIOServer(res.socket.server, {
       path: "/api/socket/io",
-      transports: ["websocket", "polling"], 
+      transports: ["websocket", "polling"],
     });
     res.socket.server.io = io;
 
     io.on("connection", (socket) => {
       console.log("New client connected");
+      
       socket.on("disconnect", () => {
         console.log("Client disconnected");
       });
