@@ -15,6 +15,7 @@ export const ourFileRouter = {
     .middleware(() => handleAuth())
     .onUploadComplete(() => {}),
 serverVideo: f({ video: { maxFileSize: "4MB", maxFileCount: 1 } })
+
     .middleware(() => handleAuth())
     .onUploadComplete(() => {}),
  messageFile: f(["image", "pdf","video"])

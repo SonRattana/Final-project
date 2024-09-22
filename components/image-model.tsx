@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Image from "next/image";
+
 export const ImageModal = ({ isOpen, onClose, imageUrl }: { isOpen: boolean, onClose: () => void, imageUrl: string }) => {
   if (!isOpen) return null;
 
@@ -8,11 +9,13 @@ export const ImageModal = ({ isOpen, onClose, imageUrl }: { isOpen: boolean, onC
       <div className="relative">
         <button
           onClick={onClose}
-          className="absolute top-0 right-0 m-2 text-white"
+          className="absolute w-8 h-8 border-none bg-[rgba(180,83,107,0.11)] rounded transition duration-500 hover:bg-[rgb(211,21,21)] active:bg-[rgb(130,0,0)] top-[-2rem] right-[-2rem]"
+          type="button"
         >
-          Close
+          <span className="absolute top-1/2 left-1/2 w-4 h-[1.5px] bg-white transform -translate-x-1/2 rotate-45"></span>
+          <span className="absolute top-1/2 left-1/2 w-4 h-[1.5px] bg-white transform -translate-x-1/2 -rotate-45"></span>
         </button>
-        <Image src={imageUrl} alt="Chat Image" width={800} height={800} />
+        <Image src={imageUrl} alt="Chat Image" width={350} height={300} />
       </div>
     </div>
   );

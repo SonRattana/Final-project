@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, useRef, ElementRef, forwardRef, useImperativeHandle, useCallback } from "react";
+import { Fragment, useRef, ElementRef, forwardRef, useImperativeHandle, useCallback, useEffect, useState } from "react";
 import { format } from "date-fns";
 import { Member, Message, Profile } from "@prisma/client";
 import { Loader2, ServerCrash } from "lucide-react";
@@ -8,7 +8,7 @@ import axios from 'axios';
 import { useChatQuery } from "@/hooks/use-chat-query";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 import { useChatScroll } from "@/hooks/use-chat-scroll";
-
+import io from "socket.io-client";
 import { ChatWelcome } from "./chat-welcome";
 import { ChatItem } from "./chat-item";
 
@@ -55,7 +55,7 @@ export const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
 
   const chatRef = useRef<ElementRef<"div">>(null);
   const bottomRef = useRef<ElementRef<"div">>(null);
-
+  const [socket, setSocket] = useState<any>(null);
   const {
     data,
     fetchNextPage,
@@ -69,16 +69,48 @@ export const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
     paramValue,
   });
 
-  const handleReaction = useCallback(async (messageId: string, emoji: string) => {
+  useEffect(() => {
+    // Connect to WebSocket
+    const newSocket = io(socketUrl, {
+      path: "/api/socket/io",
+      query: socketQuery,
+      transports: ["websocket"],
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.disconnect(); // Disconnect on component unmount
+    };
+  }, [socketUrl, socketQuery]);
+
+  // Add reaction to the message
+  const handleAddReaction = useCallback(async (messageId: string, emoji: string) => {
     try {
       await axios.post('/api/socket/reaction', {
         messageId,
         emoji,
         serverId: socketQuery.serverId,
-        channelId: socketQuery.channelId
+        channelId: socketQuery.channelId,
       });
     } catch (error) {
-      console.error("error when add reaction:", error);
+      console.error("error when adding reaction:", error);
+    }
+  }, [socketQuery.serverId, socketQuery.channelId]);
+
+  // Remove reaction from the message
+  const handleRemoveReaction = useCallback(async (messageId: string, emoji: string) => {
+    try {
+      await axios.delete('/api/socket/reaction', {
+        data: {
+          messageId,
+          emoji,
+          serverId: socketQuery.serverId,
+          channelId: socketQuery.channelId,
+        }
+      });
+    } catch (error) {
+      console.error("error when removing reaction:", error);
     }
   }, [socketQuery.serverId, socketQuery.channelId]);
 
@@ -169,7 +201,8 @@ export const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
                   socketUrl={socketUrl}
                   socketQuery={socketQuery}
                   reactions={message.reactions}
-                  onReaction={handleReaction}
+                  onAddReaction={handleAddReaction}
+                  onRemoveReaction={handleRemoveReaction}
                 />
               );
             })}

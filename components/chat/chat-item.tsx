@@ -51,7 +51,8 @@ interface ChatItemProps {
   onClick?: MouseEventHandler<HTMLDivElement>;
   onReply?: (messageId: string, content: string) => void;
   replyTo?: ChatItemProps | null;
-  onReaction: (messageId: string, emoji: string) => void;
+  onAddReaction: (messageId: string, emoji: string) => void;
+  onRemoveReaction: (messageId: string, emoji: string) => void;
   reactions?: Reaction[];
 }
 
@@ -81,7 +82,8 @@ export const ChatItem = ({
   onClick,
   onReply,
   replyTo = null,
-  onReaction,
+  onAddReaction,
+  onRemoveReaction,
   reactions = [],
 }: ChatItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -97,29 +99,7 @@ export const ChatItem = ({
   const [showAlert, setShowAlert] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  useEffect(() => {
-    const socket = io(socketUrl, {
-      path: "/api/socket/io",
-      query: socketQuery,
-      transports: ["websocket", "polling"],
-    });
-
-    socket.on("reaction_added", ({ messageId, reactions }) => {
-      if (messageId === id) {
-        setLocalReactions(reactions);
-      }
-    });
-
-    socket.on("reaction_removed", ({ messageId, reactions }) => {
-      if (messageId === id) {
-        setLocalReactions(reactions);
-      }
-    });
-
-    return () => {
-      socket.disconnect();
-    };
-  }, [id, socketUrl, socketQuery]);
+ 
 
   const onMemberClick = () => {
     if (member.id === currentMember.id) {
@@ -195,7 +175,25 @@ export const ChatItem = ({
   const isPDF = fileType === "pdf" && fileUrl;
   const isImage = !isPDF && fileUrl && !fileUrl.endsWith(".mp4") && !fileUrl.endsWith(".mov");
   const isVideo = fileUrl && (fileUrl.endsWith(".mp4") || fileUrl.endsWith(".mov"));
+  useEffect(() => {
+    const socket = io(socketUrl, {
+      path: "/api/socket/io",
+      query: socketQuery,
+      transports: ["websocket", "polling"],
+    });
 
+    socket.on("reaction_update", ({ messageId, reactions }) => {
+      if (messageId === id) {
+        setTimeout(() => {
+          setLocalReactions(reactions);
+        }, 3000); // Thêm độ trễ 3 giây
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [id, socketUrl, socketQuery]);
   const handleAddReaction = async (emoji: string) => {
     try {
       setLocalReactions((prevReactions) => {
@@ -224,9 +222,7 @@ export const ChatItem = ({
   const handleRemoveReaction = async (emoji: string) => {
     try {
      
-      const reaction = localReactions.find((r) => r.emoji === emoji);
-
-   
+    
       setLocalReactions((prevReactions) => {
         const existingReaction = prevReactions.find((r) => r.emoji === emoji);
         if (existingReaction && existingReaction.count > 1) {
@@ -237,6 +233,7 @@ export const ChatItem = ({
           return prevReactions.filter((r) => r.emoji !== emoji);
         }
       });
+      
 
       await axios.delete("/api/socket/reaction", {
         data: {
@@ -329,7 +326,7 @@ export const ChatItem = ({
             </div>
           )}
 
-          {!isImage && !isVideo && (
+          {!isImage && !isVideo && !fileUrl && !isEditing && (
             <p
               className={cn(
                 "text-sm text-zinc-600 dark:text-zinc-300",
@@ -362,6 +359,20 @@ export const ChatItem = ({
               )}
             </p>
           )}
+           {isPDF && (
+            <div className="relative flex items-center p-2 mt-2 rounded-md bg-background/10">
+              <FileIcon className="h-10 w-10 fill-indigo-200 stroke-indigo-400" />
+              <a 
+                href={fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 text-sm text-indigo-500 dark:text-indigo-400 hover:underline"
+              >
+                PDF File
+              </a>
+            </div>
+          )}
+          
 
           <div className="flex flex-wrap mt-1">
             {localReactions
@@ -387,7 +398,7 @@ export const ChatItem = ({
                 >
                   <button
                     onClick={() => handleRemoveReaction(emoji)}
-                    onMouseEnter={() => handleShowReactionMembers(emoji)}
+                    // onMouseEnter={() => handleShowReactionMembers(emoji)}
                     className="flex items-center space-x-1 bg-gray-200 dark:bg-gray-700 rounded-full px-2 py-1 text-sm mr-2 mb-2 hover:bg-gray-300 dark:hover:bg-gray-600 transition"
                   >
                     <span>{emoji}</span>
@@ -485,10 +496,10 @@ export const ChatItem = ({
         
       </div>
       {showAlert && (
-        <div className="flex flex-col gap-2 w-60 sm:w-72 text-[10px] sm:text-xs z-50">
+        <div className="flex flex-col gap-2 w-60 sm:w-96 text-[10px] sm:text-xs z-50">
           <div
-            className="warning-alert cursor-default flex items-center justify-between w-full h-12 sm:h-14 rounded-lg px-[10px]
-    bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-200"
+            className="warning-alert cursor-default flex items-center justify-between w-full h-20 sm:h-20 rounded-lg px-[10px]
+             bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-200"
           >
             <div className="flex gap-2">
               <div className="flex items-center justify-center bg-red-300 dark:bg-red-800 p-1 rounded-lg">
@@ -510,7 +521,7 @@ export const ChatItem = ({
               <div>
                 <p className="text-red-800 dark:text-red-200">Warning</p>{" "}
                 <p className="text-red-600 dark:text-red-300">
-                  You can not delete this reaction from others!
+                You cannot delete someone else reaction or that person has deleted this reaction!
                 </p>
               </div>
             </div>
@@ -524,7 +535,7 @@ export const ChatItem = ({
                 viewBox="0 0 24 24"
                 strokeWidth="1.5"
                 stroke="currentColor"
-                className="w-4 h-4"
+                className="w-5 h-5"
               >
                 <path
                   strokeLinecap="round"
