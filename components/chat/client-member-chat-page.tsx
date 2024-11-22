@@ -6,6 +6,7 @@ import { ChatMessages,  ChatMessagesRef } from "@/components/chat/chat-messages"
 import { ChatInput } from "@/components/chat/chat-input";
 import { MediaRoom } from "@/components/media-room";
 import ClientChatHeader from "./client-chat-header";
+import { channel } from "diagnostics_channel";
 
 interface Message {
   id: string;
@@ -77,7 +78,9 @@ const ClientMemberChatPage: React.FC<ClientMemberChatPageProps> = ({
             type="conversation"
             apiUrl="/api/socket/direct-messages"
             query={{
+              serverId,
               conversationId: conversationId,
+              channelId: "default-channel-id",
             }}
           />
         </>

@@ -27,7 +27,7 @@ interface ChatInputProps {
   query: {
     channelId: string;
     serverId: string; // Ensure serverId is inside query
-    
+    conversationId?: string;
   };
   name: string;
   type: "conversation" | "channel";
