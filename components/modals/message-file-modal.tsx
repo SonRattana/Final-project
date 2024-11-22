@@ -19,15 +19,27 @@ import {
   FormControl,
   FormField,
   FormItem,
+  FormMessage, 
 } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { FileUpload } from "@/components/file-upload";
 import { useRouter } from "next/navigation";
 import { useModal } from "@/hooks/use-modal-store";
 
-const formSchema = z.object({
+// Schema để kiểm tra tệp đính kèm
+const attachmentSchema = z.object({
   fileUrl: z.string().min(1, {
-    message: "Attachment is required."
+    message: "Attachment is required or File size exceeds 4MB."
+  })
+});
+
+// Schema để kiểm tra kích thước tệp
+const fileSizeSchema = z.object({
+  fileUrl: z.string().refine((value) => {
+    const file = value ? new File([value], value) : null;
+    return file ? file.size <= 4 * 1024 * 1024 : true;
+  }, {
+    message: "File size exceeds 4MB."
   })
 });
 
@@ -38,21 +50,29 @@ export const MessageFileModal = () => {
   const isModalOpen = isOpen && type === "messageFile";
   const { apiUrl, query } = data;
 
-  const form = useForm({
-    resolver: zodResolver(formSchema),
+  const attachmentForm = useForm({
+    resolver: zodResolver(attachmentSchema),
+    defaultValues: {
+      fileUrl: "",
+    }
+  });
+
+  const fileSizeForm = useForm({
+    resolver: zodResolver(fileSizeSchema),
     defaultValues: {
       fileUrl: "",
     }
   });
 
   const handleClose = () => {
-    form.reset();
+    attachmentForm.reset();
+    fileSizeForm.reset();
     onClose();
   }
 
-  const isLoading = form.formState.isSubmitting;
+  const isLoading = attachmentForm.formState.isSubmitting || fileSizeForm.formState.isSubmitting;
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  const onSubmit = async (values: z.infer<typeof attachmentSchema>) => {
     try {
       const url = qs.stringifyUrl({
         url: apiUrl || "",
@@ -64,11 +84,21 @@ export const MessageFileModal = () => {
         content: values.fileUrl,
       });
 
-      form.reset();
+      attachmentForm.reset();
+      fileSizeForm.reset();
       router.refresh();
       handleClose();
     } catch (error) {
       console.log(error);
+    }
+  }
+
+  const handleFileError = (error: string) => {
+    if (error === "FileSizeMismatch") {
+      fileSizeForm.setError("fileUrl", {
+        type: "manual",
+        message: "File size exceeds 4MB."
+      });
     }
   }
 
@@ -83,12 +113,12 @@ export const MessageFileModal = () => {
             Send a file as a message
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <Form {...attachmentForm}>
+          <form onSubmit={attachmentForm.handleSubmit(onSubmit)} className="space-y-8">
             <div className="space-y-8 px-6">
               <div className="flex items-center justify-center text-center">
                 <FormField
-                  control={form.control}
+                  control={attachmentForm.control}
                   name="fileUrl"
                   render={({ field }) => (
                     <FormItem>
@@ -97,13 +127,18 @@ export const MessageFileModal = () => {
                           endpoint="messageFile"
                           value={field.value}
                           onChange={field.onChange}
+                          onError={handleFileError} 
                         />
                       </FormControl>
+                      <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
             </div>
+            <DialogDescription className="text-center font-bold text-zinc-500">
+            File size must less than 4MB
+          </DialogDescription>
             <DialogFooter className="bg-gray-100 px-6 py-4">
               <Button variant="primary" disabled={isLoading}>
                 Send

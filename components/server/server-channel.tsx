@@ -1,15 +1,12 @@
 "use client";
 
-import { 
-  Channel, 
-  ChannelType, 
-  MemberRole,
-  Server
-} from "@prisma/client";
+import { Channel, ChannelType, MemberRole, Server } from "@prisma/client";
 import { Edit, Hash, Lock, Mic, Trash, Video } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+
 import axios from "axios";
+import { filterBadWords } from "@/lib/utils";
 
 import { cn } from "@/lib/utils";
 import { ActionTooltip } from "@/components/action-tooltip";
@@ -26,13 +23,13 @@ const iconMap = {
   [ChannelType.TEXT]: Hash,
   [ChannelType.AUDIO]: Mic,
   [ChannelType.VIDEO]: Video,
-}
+};
 
 export const ServerChannel = ({
   channel,
   server,
   role,
-  userId
+  userId,
 }: ServerChannelProps) => {
   const { onOpen } = useModal();
   const params = useParams();
@@ -43,7 +40,9 @@ export const ServerChannel = ({
   useEffect(() => {
     const fetchUnreadCount = async () => {
       try {
-        const response = await axios.post(`/api/channels/${channel.id}`, { userId });
+        const response = await axios.post(`/api/channels/${channel.id}`, {
+          userId,
+        });
         setUnreadCount(response.data.unreadCount);
       } catch (error) {
         console.error("Failed to fetch unread count:", error);
@@ -56,11 +55,14 @@ export const ServerChannel = ({
   // Function to mark notifications as read when the channel is clicked
   const markAsRead = async () => {
     try {
-      const response = await axios.post("/api/socket/notifications/mark-as-read", {
-        userId,
-        channelId: channel.id,
-      });
-  
+      const response = await axios.post(
+        "/api/socket/notifications/mark-as-read",
+        {
+          userId,
+          channelId: channel.id,
+        }
+      );
+
       if (response.status === 200) {
         setUnreadCount(0); // Remove the unread badge if successful
       }
@@ -68,16 +70,16 @@ export const ServerChannel = ({
       console.error("Failed to mark notifications as read:", error);
     }
   };
-  
+
   const onClick = () => {
-    markAsRead();  // Mark notifications as read when user clicks the channel
+    markAsRead(); // Mark notifications as read when user clicks the channel
     router.push(`/servers/${params?.serverId}/channels/${channel.id}`);
   };
 
   const onAction = (e: React.MouseEvent, action: ModalType) => {
     e.stopPropagation();
     onOpen(action, { channel, server });
-  }
+  };
 
   const Icon = iconMap[channel.type];
 
@@ -90,12 +92,16 @@ export const ServerChannel = ({
       )}
     >
       <Icon className="flex-shrink-0 w-5 h-5 text-zinc-500 dark:text-zinc-400" />
-      <p className={cn(
-        "line-clamp-1 font-semibold text-sm text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-400 dark:group-hover:text-zinc-300 transition",
-        params?.channelId === channel.id && "text-primary dark:text-zinc-200 dark:group-hover:text-white"
-      )}>
-        {channel.name}
+      <p
+        className={cn(
+          "line-clamp-1 font-semibold text-sm text-zinc-500 group-hover:text-zinc-600 dark:text-zinc-400 dark:group-hover:text-zinc-300 transition",
+          params?.channelId === channel.id &&
+            "text-primary dark:text-zinc-200 dark:group-hover:text-white"
+        )}
+      >
+        {filterBadWords(channel.name)}
       </p>
+
       {unreadCount > 0 && (
         <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
           {unreadCount}
@@ -118,9 +124,7 @@ export const ServerChannel = ({
         </div>
       )}
       {channel.name === "general" && (
-        <Lock
-          className="ml-auto w-4 h-4 text-zinc-500 dark:text-zinc-400"
-        />
+        <Lock className="ml-auto w-4 h-4 text-zinc-500 dark:text-zinc-400" />
       )}
     </button>
   );

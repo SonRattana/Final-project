@@ -67,8 +67,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponseW
 
       // Phát sự kiện cập nhật phản ứng qua WebSocket ngay lập tức
       if (res.socket.server.io) {
-        res.socket.server.io.emit("reaction_update", { messageId, reactions: updatedReactions });
+        res.socket.server.io.to(messageId).emit("reaction_update", { messageId, reactions: updatedReactions });
       }
+      
 
       return res.status(200).json(updatedReactions);
     } catch (error) {
@@ -127,12 +128,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponseW
         where: { messageId },
         include: { profile: true },
       });
-
-      // Phát sự kiện cập nhật phản ứng qua WebSocket ngay lập tức
+      
       if (res.socket.server.io) {
         res.socket.server.io.emit("reaction_update", { messageId, reactions: updatedReactions });
       }
-
+      console.log("Updated reactions:", updatedReactions);
+      
       return res.status(200).json(updatedReactions);
     } catch (error) {
       console.error("[REACTION_DELETE] Error: ", error);

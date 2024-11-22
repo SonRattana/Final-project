@@ -17,7 +17,7 @@ export default async function handler(
 }
 
 // Function to handle POST requests for sending a message
-async function handlePostMessage(
+export async function handlePostMessage(
   req: NextApiRequest,
   res: NextApiResponseServerIo
 ) {
@@ -30,16 +30,8 @@ async function handlePostMessage(
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    if (!serverId) {
-      return res.status(400).json({ error: "Server ID missing" });
-    }
-
-    if (!channelId) {
-      return res.status(400).json({ error: "Channel ID missing" });
-    }
-
-    if (!content) {
-      return res.status(400).json({ error: "Content missing" });
+    if (!serverId || !channelId || !content) {
+      return res.status(400).json({ error: "Missing required fields" });
     }
 
     const server = await db.server.findFirst({
@@ -60,69 +52,41 @@ async function handlePostMessage(
       return res.status(404).json({ message: "Server not found" });
     }
 
-    const channel = await db.channel.findFirst({
-      where: {
-        id: channelId as string,
-        serverId: serverId as string,
-      },
-    });
-
-    if (!channel) {
-      return res.status(404).json({ message: "Channel not found" });
-    }
-
-    const member = server.members.find(
-      (member) => member.profileId === profile.id
-    );
-
-    if (!member) {
-      return res.status(404).json({ message: "Member not found" });
-    }
-
     const message = await db.message.create({
       data: {
         content,
         fileUrl,
         channelId: channelId as string,
-        memberId: member.id,
+        memberId: server.members.find((m) => m.profileId === profile.id)!.id,
       },
       include: {
-        member: {
-          include: {
-            profile: true,
-          },
-        },
+        member: { include: { profile: true } },
       },
     });
 
-    const channelKey = `chat:${channelId}:messages`;
-
-    res?.socket?.server?.io?.emit(channelKey, message);
-
     const notifications = server.members
-      .filter((m) => m.profileId !== profile.id)
+      .filter((m) => m.profileId !== profile.id) // Gửi thông báo cho các thành viên khác
       .map((m) => ({
         userId: m.profileId,
-        message: `New message in ${channel.name} from ${profile.name}: ${content}`,
+        message: `New message in ${channelId} from ${profile.name}`,
         channelId: channelId as string,
       }));
 
-    await db.notification.createMany({
-      data: notifications,
-    });
+    // Tạo thông báo trong database
+    await db.notification.createMany({ data: notifications });
 
+    // Phát sự kiện `new_notification` cho tất cả user trong server
     notifications.forEach((notification) => {
-      res?.socket?.server?.io
-        ?.to(notification.userId)
-        .emit("new_notification", notification);
+      res?.socket?.server?.io?.emit("new_notification", notification);
     });
 
     return res.status(200).json(message);
   } catch (error) {
-    console.log("[MESSAGES_POST]", error);
-    return res.status(500).json({ message: "Internal Error" });
+    console.error("[POST_MESSAGE_ERROR]", error);
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 }
+
 
 // Function to handle GET requests for fetching messages
 async function handleGetMessages(

@@ -203,6 +203,7 @@ export const ChatMessages = forwardRef<ChatMessagesRef, ChatMessagesProps>(({
                   reactions={message.reactions}
                   onAddReaction={handleAddReaction}
                   onRemoveReaction={handleRemoveReaction}
+                  taggedUsers={message.taggedUsers || []}
                 />
               );
             })}

@@ -78,7 +78,18 @@ body,
   margin: 0.5em 0;
   text-align: center;
 }
- 
+ .hidden{
+  display: none;
+}
+.text-blue-500 {
+  color: #3b82f6;
+}
+.font-semibold {
+  font-weight: 600;
+}
+
+
+
 @layer base {
   * {
     @apply border-border;
@@ -86,4 +97,5 @@ body,
   body {
     @apply bg-background text-foreground;
   }
+  
 }

@@ -9,12 +9,14 @@ import "@uploadthing/react/styles.css";
 
 interface FileUploadProps {
   onChange: (url?: string) => void;
+  onError?: (error: string) => void; // Thêm thuộc tính onError
   value: string;
   endpoint: "messageFile" | "serverImage" | "serverVideo"
 }
 
 export const FileUpload = ({
   onChange,
+  onError, // Thêm thuộc tính onError
   value,
   endpoint
 }: FileUploadProps) => {
@@ -89,7 +91,11 @@ export const FileUpload = ({
         onChange(res?.[0].url);
       }}
       onUploadError={(error: Error) => {
-        console.log(error);
+        if (error.message.includes("File size exceeds")) {
+          onError?.("FileSizeMismatch");
+        } else {
+          console.log(error);
+        }
       }}
     />
   )

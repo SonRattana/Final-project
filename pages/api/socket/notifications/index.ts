@@ -27,8 +27,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponseS
 
     // Check if `res.socket.server.io` exists
     if (res.socket && res.socket.server && res.socket.server.io) {
-      const io = res.socket.server.io; // Access the initialized io instance
-      io.to(userId).emit("new_notification", notification);
+      const io = res.socket.server.io;
+      console.log("Emitting new_notification:", notification);
+      io.to(channelId).emit("new_notification", notification);
     } else {
       console.error("Socket.io is not initialized on the server.");
       return res.status(500).json({ error: "Socket.io not initialized" });

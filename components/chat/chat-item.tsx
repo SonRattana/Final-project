@@ -6,6 +6,8 @@ import qs from "query-string";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Member, MemberRole, Profile } from "@prisma/client";
+import { filterBadWords } from "@/lib/utils";
+
 import {
   Edit,
   FileIcon,
@@ -54,6 +56,7 @@ interface ChatItemProps {
   onAddReaction: (messageId: string, emoji: string) => void;
   onRemoveReaction: (messageId: string, emoji: string) => void;
   reactions?: Reaction[];
+  taggedUsers?: string[];
 }
 
 const roleIconMap = {
@@ -67,6 +70,41 @@ const formSchema = z.object({
 });
 
 const commonEmojis = ["👍", "❤️", "😂", "😮", "😢", "😡"];
+const renderTaggedUsers = (taggedUsers: string[]) => {
+  const uniqueTaggedUsers = Array.from(new Set(taggedUsers));
+
+  return uniqueTaggedUsers.map((user, index) => (
+    <span
+      key={index}
+      className="bg-blue-600 text-blue px-1 py-0.5 rounded font-bold"
+    >
+      @{user}{" "}
+    </span>
+  ));
+};
+
+const formatMessageContent = (content: string): ReactNode => {
+  // Lọc từ tục tĩu
+  const filteredContent = filterBadWords(content);
+
+  // Tách nội dung dựa trên @username
+  const parts = filteredContent.split(/(@[\w\s]+)/g);
+
+  return parts.map((part, index) =>
+    part.startsWith("@") ? (
+      <span
+        key={index}
+        className="bg-blue-600 text-white px-1 py-0.5 rounded font-bold"
+      >
+        {part}
+      </span>
+    ) : (
+      <span key={index}>{part}</span>
+    )
+  );
+};
+
+
 
 export const ChatItem = ({
   id,
@@ -85,6 +123,7 @@ export const ChatItem = ({
   onAddReaction,
   onRemoveReaction,
   reactions = [],
+  taggedUsers = [],
 }: ChatItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
@@ -99,8 +138,7 @@ export const ChatItem = ({
   const [showAlert, setShowAlert] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
- 
-
+  const [filteredContent, setFilteredContent] = useState<string>("");
   const onMemberClick = () => {
     if (member.id === currentMember.id) {
       return;
@@ -110,9 +148,12 @@ export const ChatItem = ({
 
   const handleImageClick = (imageUrl: string) => {
     setSelectedImage(imageUrl);
-    setIsModalOpen(true); 
+    setIsModalOpen(true);
   };
-
+  useEffect(() => {
+    // Lọc nội dung tin nhắn chỉ một lần
+    setFilteredContent(filterBadWords(content));
+  }, [content]);
   const closeModal = () => {
     setIsModalOpen(false);
     setSelectedImage(null);
@@ -148,17 +189,21 @@ export const ChatItem = ({
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
+      // Lọc từ tục tĩu trước khi gửi
+      const filteredContent = filterBadWords(values.content);
+  
       const url = qs.stringifyUrl({
         url: `${socketUrl}/${id}`,
         query: socketQuery,
       });
-      await axios.patch(url, values);
+      await axios.patch(url, { content: filteredContent });
       form.reset();
       setIsEditing(false);
     } catch (error) {
       console.log(error);
     }
   };
+  
 
   useEffect(() => {
     form.reset({ content });
@@ -173,8 +218,11 @@ export const ChatItem = ({
   const canEditMessage = !deleted && isOwner && !fileUrl;
   const canReplyMessage = !deleted && currentMember.id !== member.id;
   const isPDF = fileType === "pdf" && fileUrl;
-  const isImage = !isPDF && fileUrl && !fileUrl.endsWith(".mp4") && !fileUrl.endsWith(".mov");
-  const isVideo = fileUrl && (fileUrl.endsWith(".mp4") || fileUrl.endsWith(".mov"));
+  const isTagged = taggedUsers && taggedUsers.length > 0;
+  const isImage =
+    !isPDF && fileUrl && !fileUrl.endsWith(".mp4") && !fileUrl.endsWith(".mov");
+  const isVideo =
+    fileUrl && (fileUrl.endsWith(".mp4") || fileUrl.endsWith(".mov"));
   useEffect(() => {
     const socket = io(socketUrl, {
       path: "/api/socket/io",
@@ -221,8 +269,6 @@ export const ChatItem = ({
 
   const handleRemoveReaction = async (emoji: string) => {
     try {
-     
-    
       setLocalReactions((prevReactions) => {
         const existingReaction = prevReactions.find((r) => r.emoji === emoji);
         if (existingReaction && existingReaction.count > 1) {
@@ -233,7 +279,6 @@ export const ChatItem = ({
           return prevReactions.filter((r) => r.emoji !== emoji);
         }
       });
-      
 
       await axios.delete("/api/socket/reaction", {
         data: {
@@ -277,7 +322,12 @@ export const ChatItem = ({
   return (
     <div
       id={id}
-      className="chat-item relative group flex items-center hover:bg-black/5 p-4 transition w-full"
+      className={cn(
+        "chat-item relative group flex items-center hover:bg-black/5 p-4 transition w-full",
+        taggedUsers.length > 0 && !isUpdated && !deleted
+          ? "highlight-message"
+          : "" // Thêm lớp nếu có taggedUsers
+      )}
       onClick={onClick}
     >
       <div className="group flex gap-x-2 items-start w-full">
@@ -304,22 +354,33 @@ export const ChatItem = ({
               {timestamp}
             </span>
           </div>
+
           {isImage && (
             <div
-            className="relative aspect-square rounded-md mt-2 overflow-hidden border flex items-center bg-secondary h-48 w-48"
-            onClick={() => handleImageClick(fileUrl!)} 
-          >
-            <Image style={{cursor:"pointer"}} src={fileUrl} alt="Image" fill className="object-cover" />
-          </div>
+              className="relative aspect-square rounded-md mt-2 overflow-hidden border flex items-center bg-secondary h-48 w-48"
+              onClick={() => handleImageClick(fileUrl!)}
+            >
+              <Image
+                style={{ cursor: "pointer" }}
+                src={fileUrl}
+                alt="Image"
+                fill
+                className="object-cover"
+              />
+            </div>
           )}
-           <ImageModal
+          <ImageModal
             isOpen={isModalOpen}
             onClose={closeModal}
             imageUrl={selectedImage!}
           />
           {isVideo && (
             <div className="relative aspect-square rounded-md mt-2 overflow-hidden border flex items-center bg-secondary h-48 w-48">
-              <video style={{cursor:"pointer"}} controls className="object-cover w-full h-full">
+              <video
+                style={{ cursor: "pointer" }}
+                controls
+                className="object-cover w-full h-full"
+              >
                 <source src={fileUrl} type={`video/${fileType}`} />
                 Your browser does not support the video tag.
               </video>
@@ -327,20 +388,20 @@ export const ChatItem = ({
           )}
 
           {!isImage && !isVideo && !fileUrl && !isEditing && (
-            <p
-              className={cn(
-                "text-sm text-zinc-600 dark:text-zinc-300",
-                deleted &&
-                  "italic text-zinc-500 dark:text-zinc-400 text-xs mt-1"
-              )}
-            >
-              {content}
-              {isUpdated && !deleted && (
-                <span className="text-[10px] mx-2 text-zinc-500 dark:text-zinc-400">
-                  (edited)
-                </span>
-              )}
-            </p>
+           <p
+           className={cn(
+             "text-sm text-zinc-600 dark:text-zinc-300",
+             deleted && "italic text-zinc-500 dark:text-zinc-400 text-xs mt-1"
+           )}
+         >
+           {deleted ? "This message was deleted" : formatMessageContent(content)}
+           {isUpdated && !deleted && (
+             <span className="text-[10px] mx-2 text-zinc-500 dark:text-zinc-400">
+               (edited)
+             </span>
+           )}
+         </p>
+         
           )}
 
           {isImage && content && !content.startsWith("http") && (
@@ -359,10 +420,10 @@ export const ChatItem = ({
               )}
             </p>
           )}
-           {isPDF && (
+          {isPDF && (
             <div className="relative flex items-center p-2 mt-2 rounded-md bg-background/10">
               <FileIcon className="h-10 w-10 fill-indigo-200 stroke-indigo-400" />
-              <a 
+              <a
                 href={fileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -372,7 +433,6 @@ export const ChatItem = ({
               </a>
             </div>
           )}
-          
 
           <div className="flex flex-wrap mt-1">
             {localReactions
@@ -493,12 +553,25 @@ export const ChatItem = ({
             />
           </ActionTooltip>
         )}
-        
       </div>
+      <style jsx>{`
+        .highlight {
+          background-color: blue;
+          color: white;
+          padding: 0.1rem 0.3rem;
+          border-radius: 0.2rem;
+          font-weight: bold;
+        }
+        .highlight-message {
+          border-left: 3px solid #f5a623;
+          background-color: rgba(255, 214, 107, 0.1);
+          padding-left: 10px;
+        }
+      `}</style>
       {showAlert && (
         <div className="flex flex-col gap-2 w-60 sm:w-96 text-[10px] sm:text-xs z-50">
           <div
-            className="warning-alert cursor-default flex items-center justify-between w-full h-20 sm:h-20 rounded-lg px-[10px]
+            className="warning-alert cursor-default flex items-center justify-between w-full h-24 sm:h-20 rounded-lg px-[10px]
              bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-200"
           >
             <div className="flex gap-2">
@@ -509,7 +582,7 @@ export const ChatItem = ({
                   viewBox="0 0 24 24"
                   strokeWidth="1.5"
                   stroke="currentColor"
-                  className="w-8 h-8 text-red-600" 
+                  className="w-8 h-8 text-red-600"
                 >
                   <path
                     strokeLinecap="round"
@@ -521,7 +594,8 @@ export const ChatItem = ({
               <div>
                 <p className="text-red-800 dark:text-red-200">Warning</p>{" "}
                 <p className="text-red-600 dark:text-red-300">
-                You cannot delete someone else reaction or that person has deleted this reaction!
+                  You cannot delete someone else reaction or that person has
+                  deleted this reaction!
                 </p>
               </div>
             </div>
