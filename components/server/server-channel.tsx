@@ -6,11 +6,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import axios from "axios";
-import { filterBadWords } from "@/lib/utils";
-
 import { cn } from "@/lib/utils";
 import { ActionTooltip } from "@/components/action-tooltip";
 import { ModalType, useModal } from "@/hooks/use-modal-store";
+import { useSocket } from "@/components/providers/socket-provider";
 
 interface ServerChannelProps {
   channel: Channel;
@@ -35,36 +34,66 @@ export const ServerChannel = ({
   const params = useParams();
   const router = useRouter();
 
+  const { socket } = useSocket(); // Kết nối Socket.IO
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
+  // Fetch số lượng thông báo chưa đọc từ server khi component mount
   useEffect(() => {
     const fetchUnreadCount = async () => {
       try {
         const response = await axios.post(`/api/channels/${channel.id}`, {
           userId,
         });
-        setUnreadCount(response.data.unreadCount);
+        setUnreadCount(response.data.unreadCount); // Cập nhật số thông báo chưa đọc
       } catch (error) {
         console.error("Failed to fetch unread count:", error);
       }
     };
-
+  
+    // Thiết lập interval để gọi `fetchUnreadCount` liên tục
+    const interval = setInterval(fetchUnreadCount, 2000); // Gọi mỗi 2 giây
+  
+    // Gọi ngay lập tức một lần khi component mount
     fetchUnreadCount();
+  
+    // Dọn dẹp interval khi component unmount
+    return () => clearInterval(interval);
   }, [channel.id, userId]);
+  
 
-  // Function to mark notifications as read when the channel is clicked
+  // Lắng nghe thông báo mới từ Socket.IO (realtime)
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewNotification = (notification: any) => {
+      console.log("New notification received:", notification);
+
+      // Chỉ tăng thông báo nếu không phải của người gửi
+      if (
+        notification.channelId === channel.id &&
+        notification.senderId !== userId
+      ) {
+        setUnreadCount((prev) => prev + 1);
+      }
+    };
+
+    socket.on("new_notification", handleNewNotification);
+
+    return () => {
+      socket.off("new_notification", handleNewNotification);
+    };
+  }, [socket, channel.id, userId]);
+
+  // Đánh dấu thông báo đã đọc khi nhấp vào channel
   const markAsRead = async () => {
     try {
-      const response = await axios.post(
-        "/api/socket/notifications/mark-as-read",
-        {
-          userId,
-          channelId: channel.id,
-        }
-      );
+      const response = await axios.post("/api/socket/notifications/mark-as-read", {
+        userId,
+        channelId: channel.id,
+      });
 
       if (response.status === 200) {
-        setUnreadCount(0); // Remove the unread badge if successful
+        setUnreadCount(0); // Xóa badge thông báo nếu thành công
       }
     } catch (error) {
       console.error("Failed to mark notifications as read:", error);
@@ -72,8 +101,8 @@ export const ServerChannel = ({
   };
 
   const onClick = () => {
-    markAsRead(); // Mark notifications as read when user clicks the channel
-    router.push(`/servers/${params?.serverId}/channels/${channel.id}`);
+    markAsRead(); // Đánh dấu đã đọc khi nhấp vào kênh
+    router.push(`/servers/${params?.serverId}/channels/${channel.id}`); // Điều hướng đến kênh
   };
 
   const onAction = (e: React.MouseEvent, action: ModalType) => {
@@ -99,9 +128,10 @@ export const ServerChannel = ({
             "text-primary dark:text-zinc-200 dark:group-hover:text-white"
         )}
       >
-        {filterBadWords(channel.name)}
+        {channel.name}
       </p>
 
+      {/* Badge hiển thị số lượng thông báo chưa đọc */}
       {unreadCount > 0 && (
         <span className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
           {unreadCount}

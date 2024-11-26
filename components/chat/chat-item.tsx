@@ -571,7 +571,7 @@ export const ChatItem = ({
       {showAlert && (
         <div className="flex flex-col gap-2 w-60 sm:w-96 text-[10px] sm:text-xs z-50">
           <div
-            className="warning-alert cursor-default flex items-center justify-between w-full h-24 sm:h-20 rounded-lg px-[10px]
+            className="warning-alert cursor-default flex items-center justify-between w-full h-30 sm:h-30 rounded-lg px-[10px]
              bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-200"
           >
             <div className="flex gap-2">

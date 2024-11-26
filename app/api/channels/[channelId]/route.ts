@@ -193,9 +193,10 @@ export async function POST(req: Request, { params }: { params: { channelId: stri
 }
 
 
-function sendNotification(userId: string, message: string) {
-  const io = (global as any).io; 
-  if (io) {
+function sendNotification(userId: string, message: string, senderId?: string) {
+  const io = (global as any).io;
+  if (io && userId !== senderId) {
+    // Chỉ gửi nếu userId khác senderId
     io.to(userId).emit("new_notification", { message });
   }
 }
