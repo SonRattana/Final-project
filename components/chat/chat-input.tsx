@@ -117,36 +117,34 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
 
     setShowSuggestions(false);
   };
-  
-  
 
   // Handle form submission to send the message
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!values.content.trim()) {
       return;
     }
-  
+
     try {
       // Đo thời gian lọc để kiểm tra hiệu năng
       const startTime = performance.now();
       const filteredContent = filterBadWords(values.content.trim()); // Lọc nội dung
       const endTime = performance.now();
-  
+
       console.log(
         `filterBadWords executed in ${(endTime - startTime).toFixed(2)}ms`
       ); // Log thời gian lọc để debug hiệu năng
-  
+
       // Gửi nội dung đã lọc lên server
       const url = qs.stringifyUrl({
         url: apiUrl,
         query,
       });
-  
+
       await axios.post(url, {
         content: filteredContent,
         taggedUsers, // Gửi danh sách taggedUsers nếu có
       });
-  
+
       // Reset form và input sau khi gửi thành công
       form.reset();
       setTaggedUsers([]);
@@ -157,8 +155,7 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
       // Tùy chọn: Hiển thị thông báo lỗi nếu cần
     }
   };
-  
-  
+
   // Reset taggedUsers when sending a normal message
   useEffect(() => {
     if (inputValue.trim() && !inputValue.includes("@")) {
@@ -207,6 +204,7 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
                     value={inputValue}
                     onChange={(e) => {
                       field.onChange(e);
+                      
                       handleInputChange(e);
                     }}
                     style={{
@@ -217,9 +215,11 @@ export const ChatInput = ({ apiUrl, query, name, type }: ChatInputProps) => {
                   {/* Emoji picker button */}
                   <div className="absolute top-7 right-16">
                     <EmojiPicker
-                      onChange={(emoji: string) =>
-                        field.onChange(`${field.value} ${emoji}`)
-                      }
+                      onChange={(emoji: string) => {
+                        const e = `${field.value} ${emoji}`.trim(); 
+                        field.onChange(e); 
+                        setInputValue(e); 
+                      }}
                     />
                   </div>
 

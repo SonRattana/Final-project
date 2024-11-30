@@ -266,7 +266,6 @@ export const ChatItem = ({
       setLocalReactions(reactions);
     }
   };
-
   const handleRemoveReaction = async (emoji: string) => {
     try {
       setLocalReactions((prevReactions) => {
